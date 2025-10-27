@@ -3,7 +3,7 @@
 // It's kept for potential future use
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { Button } from "@shared/components/Button";
+// import { Button } from "@shared/components/Button"; // Temporarily disabled due to React version conflict
 
 export default function DetailsScreen() {
   return (

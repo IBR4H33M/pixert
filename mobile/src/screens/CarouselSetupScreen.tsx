@@ -12,7 +12,7 @@ import {
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
 import * as ImagePicker from "expo-image-picker";
-import { Button } from "@shared/components/Button";
+// import { Button } from "@shared/components/Button"; // Temporarily disabled due to React version conflict
 
 type CarouselSetupScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, "CarouselSetup">;
@@ -42,10 +42,18 @@ export default function CarouselSetupScreen({
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: false,
       quality: 1,
+      exif: true, // Include EXIF data
+      base64: false,
     });
 
     if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
+      const pickedImageUri = result.assets[0].uri;
+      console.log("Image picked:", {
+        uri: pickedImageUri,
+        width: result.assets[0].width,
+        height: result.assets[0].height,
+      });
+      setImageUri(pickedImageUri);
     }
   };
 
@@ -91,7 +99,7 @@ export default function CarouselSetupScreen({
 
       {/* Upload Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>1. Upload Your Image</Text>
+        <Text style={styles.sectionTitle}>Upload Your Image</Text>
         {imageUri ? (
           <View style={styles.imageContainer}>
             <Image source={{ uri: imageUri }} style={styles.previewImage} />
@@ -101,14 +109,14 @@ export default function CarouselSetupScreen({
           </View>
         ) : (
           <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
-            <Text style={styles.uploadButtonText}>📷 Upload Image</Text>
+            <Text style={styles.uploadButtonText}>Click to select Image</Text>
           </TouchableOpacity>
         )}
       </View>
 
       {/* Split Selection Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>2. Select Number of Splits</Text>
+        <Text style={styles.sectionTitle}>Select Number of Splits</Text>
         <View style={styles.splitOptions}>
           {[2, 3, 4].map((num) => (
             <TouchableOpacity
@@ -162,7 +170,13 @@ export default function CarouselSetupScreen({
       </View>
 
       {/* Next Button */}
-      <Button title="Next →" onPress={handleNext} disabled={!imageUri} />
+      <TouchableOpacity 
+        style={[styles.nextButton, !imageUri && styles.nextButtonDisabled]} 
+        onPress={handleNext} 
+        disabled={!imageUri}
+      >
+        <Text style={[styles.nextButtonText, !imageUri && styles.nextButtonTextDisabled]}>Next →</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -267,5 +281,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: "#ddd",
+  },
+  nextButton: {
+    backgroundColor: "#007AFF",
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 20,
+  },
+  nextButtonDisabled: {
+    backgroundColor: "#ccc",
+  },
+  nextButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  nextButtonTextDisabled: {
+    color: "#999",
   },
 });
