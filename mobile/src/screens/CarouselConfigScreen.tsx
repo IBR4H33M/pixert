@@ -79,7 +79,10 @@ export default function CarouselConfigScreen({
             return { width: assetInfo.width, height: assetInfo.height };
           }
         } catch (e) {
-          console.warn("MediaLibrary approach failed, trying ImageManipulator:", e);
+          console.warn(
+            "MediaLibrary approach failed, trying ImageManipulator:",
+            e
+          );
         }
       }
 

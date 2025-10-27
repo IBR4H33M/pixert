@@ -170,12 +170,19 @@ export default function CarouselSetupScreen({
       </View>
 
       {/* Next Button */}
-      <TouchableOpacity 
-        style={[styles.nextButton, !imageUri && styles.nextButtonDisabled]} 
-        onPress={handleNext} 
+      <TouchableOpacity
+        style={[styles.nextButton, !imageUri && styles.nextButtonDisabled]}
+        onPress={handleNext}
         disabled={!imageUri}
       >
-        <Text style={[styles.nextButtonText, !imageUri && styles.nextButtonTextDisabled]}>Next →</Text>
+        <Text
+          style={[
+            styles.nextButtonText,
+            !imageUri && styles.nextButtonTextDisabled,
+          ]}
+        >
+          Next →
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   );
