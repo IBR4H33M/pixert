@@ -1,0 +1,30 @@
+.shared-button {
+  background-color: #007aff;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin: 10px;
+}
+
+.shared-button:hover {
+  background-color: #0056b3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 122, 255, 0.3);
+}
+
+.shared-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 122, 255, 0.2);
+}
+
+.shared-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}

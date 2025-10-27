@@ -1,0 +1,20 @@
+{
+  "name": "pixert",
+  "version": "1.0.0",
+  "description": "Cross-platform app with React Native and React",
+  "private": true,
+  "scripts": {
+    "mobile": "cd mobile && npm start",
+    "web": "cd web && npm run dev",
+    "install-all": "npm install && cd mobile && npm install && cd ../web && npm install && cd ../shared && npm install"
+  },
+  "keywords": [
+    "react-native",
+    "react",
+    "expo",
+    "vite",
+    "cross-platform"
+  ],
+  "author": "",
+  "license": "MIT"
+}
