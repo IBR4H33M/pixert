@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,18 +10,21 @@ import {
   Alert,
   ActivityIndicator,
   PanResponder,
+  TextInput,
+  Animated,
 } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "../../App";
-// import { Button } from "@shared/components/Button"; // Temporarily disabled due to React version conflict
 import * as MediaLibrary from "expo-media-library";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as FileSystem from "expo-file-system";
+import { useFonts, Lato_700Bold } from "@expo-google-fonts/lato";
+import * as ImagePicker from "expo-image-picker";
+import * as Haptics from "expo-haptics";
+import Slider from "@react-native-community/slider";
 
 type CarouselConfigScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, "CarouselConfig">;
-  route: RouteProp<RootStackParamList, "CarouselConfig">;
 };
 
 type AspectRatio = "3:4" | "4:5" | "1:1";
@@ -41,23 +44,98 @@ const getAspectRatioDimensions = (ratio: AspectRatio) => {
 
 export default function CarouselConfigScreen({
   navigation,
-  route,
 }: CarouselConfigScreenProps) {
-  const { imageUri, splits } = route.params;
+  // Load Lato font
+  const [fontsLoaded] = useFonts({
+    Lato_700Bold,
+  });
+
+  // Image upload states
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [selectedSplits, setSelectedSplits] = useState<number>(2);
+  const [isLoadingImage, setIsLoadingImage] = useState(false);
+
+  // Configuration states
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("4:5");
-  const [alignment, setAlignment] = useState<Alignment>("top");
+  const [gridWidthPercentage, setGridWidthPercentage] = useState<number>(100); // 50-100%
+  const [previewWidth, setPreviewWidth] = useState<number>(300);
+  const [previewHeight, setPreviewHeight] = useState(300);
+  const [gridHorizontalOffset, setGridHorizontalOffset] = useState<number>(0);
+  const [gridVerticalOffset, setGridVerticalOffset] = useState(0);
+  const panStartX = useRef(0);
+  const panStartY = useRef(0);
+
+  // Refs to track current offset values for pan responder
+  const gridHorizontalOffsetRef = useRef(0);
+  const gridVerticalOffsetRef = useRef(0);
+
+  const [gridHeight, setGridHeight] = useState(0);
+  const [gridWidth, setGridWidth] = useState(0);
+
+  // Refs to hold current dimension values for pan responder
+  const previewWidthRef = useRef(300);
+  const previewHeightRef = useRef(300);
+  const gridWidthRef = useRef(0);
+  const gridHeightRef = useRef(0);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [gridVerticalOffset, setGridVerticalOffset] = useState(0);
-  const [gridHeight, setGridHeight] = useState(0);
-  const [previewHeight, setPreviewHeight] = useState(300);
   const [imageAspectRatio, setImageAspectRatio] = useState(1);
 
-  // Load image dimensions on mount
-  useEffect(() => {
-    Image.getSize(imageUri, (width, height) => {
-      setImageAspectRatio(width / height);
+  // Image picker function
+  const pickImage = async () => {
+    setIsLoadingImage(true);
+
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission Required",
+        "Sorry, we need camera roll permissions to upload images!"
+      );
+      setIsLoadingImage(false);
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: false,
+      quality: 1,
+      exif: true,
+      base64: false,
     });
+
+    if (!result.canceled) {
+      const pickedImageUri = result.assets[0].uri;
+      console.log("Image picked:", {
+        uri: pickedImageUri,
+        width: result.assets[0].width,
+        height: result.assets[0].height,
+      });
+      setImageUri(pickedImageUri);
+
+      // Load image aspect ratio for preview
+      Image.getSize(pickedImageUri, (width, height) => {
+        setImageAspectRatio(width / height);
+        setIsLoadingImage(false);
+      });
+    } else {
+      setIsLoadingImage(false);
+    }
+  };
+
+  const getFinalSplits = (): number => {
+    return selectedSplits;
+  };
+
+  const splits = getFinalSplits();
+
+  // Load image dimensions on mount (only if imageUri exists)
+  useEffect(() => {
+    if (imageUri) {
+      Image.getSize(imageUri, (width, height) => {
+        setImageAspectRatio(width / height);
+      });
+    }
   }, [imageUri]);
 
   // Helper function to get TRUE image dimensions (not display size)
@@ -141,6 +219,20 @@ export default function CarouselConfigScreen({
   };
 
   const handleGenerate = async () => {
+    if (!imageUri) {
+      Alert.alert("No Image", "Please upload an image first!");
+      return;
+    }
+
+    const splits = getFinalSplits();
+    if (splits === 0) {
+      Alert.alert(
+        "Invalid Input",
+        "Please select or enter a valid number of splits (4-10)."
+      );
+      return;
+    }
+
     try {
       setIsGenerating(true);
       setProgress(0);
@@ -179,7 +271,6 @@ export default function CarouselConfigScreen({
         splits,
         aspectRatio,
         targetAspect,
-        alignment,
       });
 
       // Calculate dimensions for each carousel image with high precision
@@ -218,27 +309,15 @@ export default function CarouselConfigScreen({
         totalWidth: (cropWidth * splits).toFixed(2),
       });
 
-      // Calculate vertical offset based on alignment with high precision
-      let yOffset = 0;
-      if (alignment === "bottom") {
-        yOffset = imageSize.height - cropHeight;
-      } else if (alignment === "top") {
-        yOffset = 0;
-      } else {
-        // custom - use the dragged position with precise calculation
-        const offsetRatio = gridVerticalOffset / previewHeight;
-        yOffset = offsetRatio * imageSize.height;
-        // Ensure it doesn't exceed bounds
-        yOffset = Math.max(0, Math.min(yOffset, imageSize.height - cropHeight));
-      }
+      // Calculate vertical offset based on dragged position with high precision
+      const offsetRatio = gridVerticalOffset / previewHeight;
+      let yOffset = offsetRatio * imageSize.height;
+      // Ensure it doesn't exceed bounds
+      yOffset = Math.max(0, Math.min(yOffset, imageSize.height - cropHeight));
 
       console.log("Vertical offset calculated", {
         yOffset: yOffset.toFixed(2),
-        alignment,
-        offsetRatio:
-          alignment === "custom"
-            ? (gridVerticalOffset / previewHeight).toFixed(4)
-            : "N/A",
+        offsetRatio: offsetRatio.toFixed(4),
       });
 
       // Create Pixert album
@@ -420,72 +499,142 @@ export default function CarouselConfigScreen({
   const totalGridWidth = aspectDimensions.width * splits;
   const totalGridHeight = aspectDimensions.height;
 
-  // Calculate grid height based on preview width
-  const calculateGridHeight = () => {
-    const screenWidth = Dimensions.get("window").width - 40; // padding
+  // Calculate grid height based on preview width and slider percentage
+  const calculateGridHeight = (width: number) => {
     const gridAspectRatio = totalGridWidth / totalGridHeight;
-    return screenWidth / gridAspectRatio;
+    return width / gridAspectRatio;
   };
 
-  // Update grid height when aspect ratio or splits change
+  // Update grid dimensions when aspect ratio, splits, or width percentage change
   useEffect(() => {
-    const newGridHeight = calculateGridHeight();
+    const newGridWidth = (previewWidth * gridWidthPercentage) / 100;
+    const newGridHeight = calculateGridHeight(newGridWidth);
+    setGridWidth(newGridWidth);
     setGridHeight(newGridHeight);
-  }, [aspectRatio, splits]);
+    // Update refs for pan responder
+    gridWidthRef.current = newGridWidth;
+    gridHeightRef.current = newGridHeight;
+  }, [aspectRatio, splits, gridWidthPercentage, previewWidth]);
 
-  // Reset grid position when alignment changes
+  // Update preview dimension refs whenever they change
   useEffect(() => {
-    if (alignment === "top") {
-      setGridVerticalOffset(0);
-    } else if (alignment === "bottom") {
-      const maxOffset = Math.max(0, previewHeight - gridHeight);
-      setGridVerticalOffset(maxOffset);
-    } else if (alignment === "custom") {
+    previewWidthRef.current = previewWidth;
+    previewHeightRef.current = previewHeight;
+  }, [previewWidth, previewHeight]);
+
+  // Reset grid position ONLY when image changes or aspect ratio/splits change (not on slider change)
+  useEffect(() => {
+    if (
+      previewWidth > 0 &&
+      previewHeight > 0 &&
+      gridWidth > 0 &&
+      gridHeight > 0
+    ) {
       // Center it initially
-      const centerOffset = Math.max(0, (previewHeight - gridHeight) / 2);
-      setGridVerticalOffset(centerOffset);
+      const centerVerticalOffset = Math.max(
+        0,
+        (previewHeight - gridHeight) / 2
+      );
+      const centerHorizontalOffset = Math.max(
+        0,
+        (previewWidth - gridWidth) / 2
+      );
+      setGridVerticalOffset(centerVerticalOffset);
+      setGridHorizontalOffset(centerHorizontalOffset);
+      // Also update refs
+      gridVerticalOffsetRef.current = centerVerticalOffset;
+      gridHorizontalOffsetRef.current = centerHorizontalOffset;
     }
-  }, [alignment, gridHeight, previewHeight]);
+  }, [aspectRatio, splits, imageUri]); // Only reset on these changes, not gridWidth/gridHeight
 
-  // Create pan responder for dragging the grid (only within preview area)
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => alignment === "custom",
-    onMoveShouldSetPanResponder: () => alignment === "custom",
-    onPanResponderGrant: () => {
-      // User started touching
-    },
-    onPanResponderMove: (evt, gestureState) => {
-      if (alignment === "custom") {
-        const maxOffset = Math.max(0, previewHeight - gridHeight);
-        let newOffset = gridVerticalOffset + gestureState.dy;
-        newOffset = Math.max(0, Math.min(newOffset, maxOffset));
-        setGridVerticalOffset(newOffset);
-      }
-    },
-    onPanResponderRelease: (evt, gestureState) => {
-      // Finalize position
-      if (alignment === "custom") {
-        const maxOffset = Math.max(0, previewHeight - gridHeight);
-        let finalOffset = gridVerticalOffset + gestureState.dy;
-        finalOffset = Math.max(0, Math.min(finalOffset, maxOffset));
-        setGridVerticalOffset(finalOffset);
-      }
-    },
-  });
+  // Create pan responder for dragging the grid (both vertical and horizontal)
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt, gestureState) => {
+        // Store current offsets from refs when touch starts
+        panStartX.current = gridHorizontalOffsetRef.current;
+        panStartY.current = gridVerticalOffsetRef.current;
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        // Use refs for current dimension values
+        const maxVerticalOffset = Math.max(
+          0,
+          previewHeightRef.current - gridHeightRef.current
+        );
+        const maxHorizontalOffset = Math.max(
+          0,
+          previewWidthRef.current - gridWidthRef.current
+        );
 
-  // Get grid position based on alignment
+        let newVerticalOffset = panStartY.current + gestureState.dy;
+        newVerticalOffset = Math.max(
+          0,
+          Math.min(newVerticalOffset, maxVerticalOffset)
+        );
+        // Update both state and ref directly
+        setGridVerticalOffset(newVerticalOffset);
+        gridVerticalOffsetRef.current = newVerticalOffset;
+
+        let newHorizontalOffset = panStartX.current + gestureState.dx;
+        newHorizontalOffset = Math.max(
+          0,
+          Math.min(newHorizontalOffset, maxHorizontalOffset)
+        );
+        // Update both state and ref directly
+        setGridHorizontalOffset(newHorizontalOffset);
+        gridHorizontalOffsetRef.current = newHorizontalOffset;
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        // Use refs for current dimension values
+        const maxVerticalOffset = Math.max(
+          0,
+          previewHeightRef.current - gridHeightRef.current
+        );
+        const maxHorizontalOffset = Math.max(
+          0,
+          previewWidthRef.current - gridWidthRef.current
+        );
+
+        let finalVerticalOffset = panStartY.current + gestureState.dy;
+        finalVerticalOffset = Math.max(
+          0,
+          Math.min(finalVerticalOffset, maxVerticalOffset)
+        );
+        // Update both state and ref directly
+        setGridVerticalOffset(finalVerticalOffset);
+        gridVerticalOffsetRef.current = finalVerticalOffset;
+
+        let finalHorizontalOffset = panStartX.current + gestureState.dx;
+        finalHorizontalOffset = Math.max(
+          0,
+          Math.min(finalHorizontalOffset, maxHorizontalOffset)
+        );
+        // Update both state and ref directly
+        setGridHorizontalOffset(finalHorizontalOffset);
+        gridHorizontalOffsetRef.current = finalHorizontalOffset;
+      },
+    })
+  ).current;
+
+  // Get grid position
   const getGridTopPosition = () => {
-    switch (alignment) {
-      case "top":
-        return 0;
-      case "bottom":
-        return Math.max(0, previewHeight - gridHeight);
-      case "custom":
-        return gridVerticalOffset;
-      default:
-        return 0;
-    }
+    return gridVerticalOffset;
   };
+
+  const getGridLeftPosition = () => {
+    return gridHorizontalOffset;
+  };
+
+  // Show loading screen while fonts are loading
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#376161" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -493,130 +642,226 @@ export default function CarouselConfigScreen({
       contentContainerStyle={styles.content}
       scrollEnabled={true}
     >
-      <Text style={styles.title}>Configure Your Carousel</Text>
+      <Text style={styles.title}>CONFIGURE IMAGES</Text>
 
-      {/* Image Preview */}
-      <View style={styles.previewSection}>
-        <Text style={styles.sectionTitle}>Selected Image</Text>
-        <Image source={{ uri: imageUri }} style={styles.previewImage} />
-        <Text style={styles.splitsInfo}>Splits: {splits} images</Text>
+      {/* Image Upload Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>
+          {imageUri ? "UPLOADED IMAGE" : "UPLOAD IMAGE"}
+        </Text>
+        {imageUri ? (
+          <View>
+            <View style={styles.uploadedImageContainer}>
+              <Image
+                source={{ uri: imageUri }}
+                style={styles.uploadedImage}
+                resizeMode="contain"
+              />
+            </View>
+            <TouchableOpacity
+              style={styles.changeImageButton}
+              onPress={pickImage}
+              disabled={isLoadingImage}
+              accessibilityLabel="Change image"
+              accessibilityHint="Opens image picker to select a different photo"
+            >
+              <Text style={styles.changeImageButtonText}>
+                {isLoadingImage ? "Loading..." : "Change Image"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.uploadButton}
+            onPress={pickImage}
+            disabled={isLoadingImage}
+            accessibilityLabel="Upload an image for carousel splitting"
+            accessibilityHint="Opens image picker to select a photo"
+          >
+            <Text style={styles.uploadButtonText}>
+              {isLoadingImage ? "⏳ Loading..." : "Click to Select Image"}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Single Preview removed here to keep only the grid preview below */}
+
+      {/* Number of Splits Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>NUMBER OF SPLITS</Text>
+        <View style={styles.splitControlContainer}>
+          <TouchableOpacity
+            style={styles.arrowButton}
+            onPress={() => {
+              if (selectedSplits > 2) {
+                setSelectedSplits(selectedSplits - 1);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }
+            }}
+            disabled={selectedSplits <= 2}
+            accessibilityLabel="Decrease split count"
+            accessibilityRole="button"
+          >
+            <Text
+              style={[
+                styles.arrowButtonText,
+                selectedSplits <= 2 && styles.arrowButtonDisabled,
+              ]}
+            >
+              &lt;
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.splitNumberBox}>
+            <Text style={styles.splitNumberText}>{selectedSplits}</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.arrowButton}
+            onPress={() => {
+              if (selectedSplits < 10) {
+                setSelectedSplits(selectedSplits + 1);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }
+            }}
+            disabled={selectedSplits >= 10}
+            accessibilityLabel="Increase split count"
+            accessibilityRole="button"
+          >
+            <Text
+              style={[
+                styles.arrowButtonText,
+                selectedSplits >= 10 && styles.arrowButtonDisabled,
+              ]}
+            >
+              &gt;
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Aspect Ratio Selection */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Select Aspect Ratio</Text>
+        <Text style={styles.sectionTitle}>ASPECT RATIO OF EACH IMAGE</Text>
         <View style={styles.optionsRow}>
-          {(["3:4", "4:5", "1:1"] as AspectRatio[]).map((ratio) => (
-            <TouchableOpacity
-              key={ratio}
-              style={[
-                styles.optionButton,
-                aspectRatio === ratio && styles.optionButtonActive,
-              ]}
-              onPress={() => setAspectRatio(ratio)}
-            >
-              <Text
-                style={[
-                  styles.optionButtonText,
-                  aspectRatio === ratio && styles.optionButtonTextActive,
-                ]}
+          {(["3:4", "4:5", "1:1"] as AspectRatio[]).map((ratio) => {
+            const [width, height] = ratio.split(":").map(Number);
+            const aspectValue = width / height;
+            return (
+              <TouchableOpacity
+                key={ratio}
+                style={styles.aspectRatioButton}
+                onPress={() => {
+                  setAspectRatio(ratio);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+                accessibilityLabel={`Aspect ratio ${ratio}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: aspectRatio === ratio }}
               >
-                {ratio}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Alignment Selection */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Carousel Alignment</Text>
-        <View style={styles.optionsRow}>
-          {(["top", "bottom", "custom"] as Alignment[]).map((align) => (
-            <TouchableOpacity
-              key={align}
-              style={[
-                styles.optionButton,
-                alignment === align && styles.optionButtonActive,
-              ]}
-              onPress={() => setAlignment(align)}
-            >
-              <Text
-                style={[
-                  styles.optionButtonText,
-                  alignment === align && styles.optionButtonTextActive,
-                ]}
-              >
-                {align.charAt(0).toUpperCase() + align.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Grid Preview - shown for all alignments */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          {alignment === "custom"
-            ? "Drag Grid to Adjust Position"
-            : "Grid Preview"}
-        </Text>
-        <View
-          style={[styles.gridPreview, { aspectRatio: imageAspectRatio }]}
-          onLayout={(event) => {
-            const { height } = event.nativeEvent.layout;
-            setPreviewHeight(height);
-          }}
-        >
-          <Image
-            source={{ uri: imageUri }}
-            style={styles.gridBackgroundImage}
-            resizeMode="contain"
-          />
-          {/* Draggable Grid Overlay */}
-          <View
-            style={[
-              styles.gridContainer,
-              {
-                top: getGridTopPosition(),
-                height: gridHeight,
-              },
-            ]}
-            {...(alignment === "custom" ? panResponder.panHandlers : {})}
-          >
-            <View style={styles.gridOverlay}>
-              {Array.from({ length: splits }).map((_, index) => (
                 <View
-                  key={index}
                   style={[
-                    styles.gridCell,
-                    {
-                      width: `${100 / splits}%`,
-                      aspectRatio:
-                        aspectDimensions.width / aspectDimensions.height,
-                      borderLeftWidth: index === 0 ? 2 : 0,
-                      borderLeftColor: "rgba(255, 255, 255, 0.9)",
-                    },
+                    styles.aspectRatioBox,
+                    { aspectRatio: aspectValue },
+                    aspectRatio === ratio && styles.aspectRatioBoxActive,
                   ]}
                 >
-                  <View style={styles.gridBorder} />
+                  <Text
+                    style={[
+                      styles.aspectRatioText,
+                      aspectRatio === ratio && styles.aspectRatioTextActive,
+                    ]}
+                  >
+                    {ratio}
+                  </Text>
                 </View>
-              ))}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Carousel Size Slider - Only show if image is selected */}
+      {imageUri && splits > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>CAROUSEL SIZE</Text>
+          <View style={styles.sliderContainer}>
+            <Text style={styles.sliderLabel}>Smaller</Text>
+            <Slider
+              style={styles.slider}
+              minimumValue={50}
+              maximumValue={100}
+              value={gridWidthPercentage}
+              onValueChange={(value) => setGridWidthPercentage(value)}
+              onSlidingComplete={() =>
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              }
+              minimumTrackTintColor="#376161"
+              maximumTrackTintColor="#ddd"
+              thumbTintColor="#376161"
+            />
+            <Text style={styles.sliderLabel}>Bigger</Text>
+          </View>
+          <Text style={styles.sliderValue}>
+            {Math.round(gridWidthPercentage)}%
+          </Text>
+        </View>
+      )}
+
+      {/* Grid Preview - Only show if image is selected */}
+      {imageUri && splits > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>DRAG THE GRID TO ALIGN</Text>
+          <View
+            style={[styles.gridPreview, { aspectRatio: imageAspectRatio }]}
+            onLayout={(event) => {
+              const { height, width } = event.nativeEvent.layout;
+              setPreviewHeight(height);
+              setPreviewWidth(width);
+            }}
+          >
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.gridBackgroundImage}
+              resizeMode="contain"
+            />
+            {/* Draggable Grid Overlay */}
+            <View
+              style={[
+                styles.gridContainer,
+                {
+                  top: getGridTopPosition(),
+                  left: getGridLeftPosition(),
+                  height: gridHeight,
+                  width: gridWidth,
+                },
+              ]}
+              {...panResponder.panHandlers}
+            >
+              <View style={styles.gridOverlay}>
+                {Array.from({ length: splits }).map((_, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.gridCell,
+                      {
+                        width: `${100 / splits}%`,
+                        aspectRatio:
+                          aspectDimensions.width / aspectDimensions.height,
+                        borderLeftWidth: index === 0 ? 2 : 0,
+                        borderLeftColor: "rgba(255, 255, 255, 0.9)",
+                      },
+                    ]}
+                  >
+                    <View style={styles.gridBorder} />
+                  </View>
+                ))}
+              </View>
             </View>
           </View>
-          {/* Drag instruction for custom mode */}
-          {alignment === "custom" && (
-            <View style={styles.dragInstructionContainer}>
-              <Text style={styles.dragInstruction}>↕️ Drag to adjust</Text>
-            </View>
-          )}
         </View>
-        <Text style={styles.gridHint}>
-          {alignment === "custom"
-            ? "Drag the grid overlay to adjust vertical position"
-            : `Grid is aligned to ${alignment}`}
-        </Text>
-      </View>
+      )}
 
       {/* Generate Button */}
       <View style={styles.generateSection}>
@@ -633,6 +878,9 @@ export default function CarouselConfigScreen({
           <TouchableOpacity
             style={styles.generateButton}
             onPress={handleGenerate}
+            accessibilityLabel="Generate carousel images"
+            accessibilityHint="Creates split images from your uploaded photo"
+            accessibilityRole="button"
           >
             <Text style={styles.generateButtonText}>Generate Carousel</Text>
           </TouchableOpacity>
@@ -651,70 +899,215 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   title: {
-    fontSize: 24,
-    fontWeight: "bold",
+    fontSize: 28,
+    fontFamily: "Lato_700Bold",
     color: "#333",
-    marginBottom: 20,
+    marginBottom: 24,
     textAlign: "center",
+    letterSpacing: 1,
+    textTransform: "uppercase",
   },
-  previewSection: {
-    marginBottom: 30,
+  // Empty State
+  emptyState: {
     alignItems: "center",
+    paddingVertical: 40,
+    paddingHorizontal: 20,
   },
-  previewImage: {
-    width: "100%",
-    height: 200,
-    borderRadius: 10,
-    marginBottom: 10,
-    resizeMode: "contain",
+  emptyStateIcon: {
+    fontSize: 64,
+    marginBottom: 16,
   },
-  splitsInfo: {
+  emptyStateTitle: {
+    fontSize: 20,
+    fontFamily: "Lato_700Bold",
+    color: "#333",
+    marginBottom: 8,
+  },
+  emptyStateText: {
     fontSize: 14,
     color: "#666",
-    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 20,
   },
   section: {
-    marginBottom: 30,
+    marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 14,
+    fontFamily: "Lato_700Bold",
     color: "#444",
-    marginBottom: 15,
+    marginBottom: 12,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  // Upload button (rectangular 18:9 with dashed border)
+  uploadButton: {
+    backgroundColor: "rgba(55,97,97,0.15)",
+    width: "100%",
+    aspectRatio: 2,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: "#376161",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  uploadButtonText: {
+    fontSize: 16,
+    fontFamily: "Lato_700Bold",
+    color: "#203838",
+  },
+  uploadedImageContainer: {
+    width: "100%",
+    aspectRatio: 2,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "#f5f5f5",
+    marginBottom: 12,
+  },
+  uploadedImage: {
+    width: "100%",
+    height: "100%",
+  },
+  changeImageButton: {
+    backgroundColor: "transparent",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  changeImageButtonText: {
+    fontSize: 14,
+    fontFamily: "Lato_700Bold",
+    color: "#376161",
+  },
+  // Preview (kept only as grid preview below)
+  previewImage: {
+    width: "100%",
+    borderRadius: 12,
+    marginBottom: 10,
   },
   optionsRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    justifyContent: "space-between",
     gap: 10,
   },
+  // Selection buttons (semi-transparent, no inner border)
   optionButton: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
-    padding: 15,
+    backgroundColor: "rgba(55,97,97,0.25)",
+    padding: 14,
     borderRadius: 10,
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#ddd",
+    marginHorizontal: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
   optionButtonActive: {
-    backgroundColor: "#007AFF",
-    borderColor: "#007AFF",
+    backgroundColor: "#376161",
+    shadowOpacity: 0.15,
+    elevation: 4,
   },
   optionButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#555",
+    fontSize: 20,
+    fontFamily: "Lato_700Bold",
+    color: "#203838",
   },
   optionButtonTextActive: {
     color: "#fff",
   },
+  // Split Control (Arrow-based UI)
+  splitControlContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 20,
+  },
+  arrowButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  arrowButtonText: {
+    fontSize: 40,
+    color: "#376161",
+    fontWeight: "300",
+  },
+  arrowButtonDisabled: {
+    opacity: 0.3,
+  },
+  splitNumberBox: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "#376161",
+    minWidth: 120,
+    paddingVertical: 20,
+    paddingHorizontal: 30,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  splitNumberText: {
+    fontSize: 48,
+    fontFamily: "Lato_700Bold",
+    color: "#376161",
+  },
+  customInput: {
+    marginTop: 12,
+    backgroundColor: "rgba(55,97,97,0.25)",
+    padding: 14,
+    borderRadius: 10,
+    fontSize: 16,
+    fontFamily: "Lato_700Bold",
+    color: "#203838",
+    textAlign: "center",
+  },
+  customInputInvalid: {
+    // keep a visual invalid hint via background tint
+    backgroundColor: "rgba(231,76,60,0.12)",
+  },
+  // Slider for grid width
+  sliderContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 8,
+  },
+  sliderLabel: {
+    fontSize: 12,
+    fontFamily: "Lato_700Bold",
+    color: "#666",
+    textTransform: "uppercase",
+  },
+  slider: {
+    flex: 1,
+    height: 40,
+  },
+  sliderValue: {
+    fontSize: 16,
+    fontFamily: "Lato_700Bold",
+    color: "#376161",
+    textAlign: "center",
+    marginTop: 8,
+  },
   gridPreview: {
     position: "relative",
     width: "100%",
-    aspectRatio: 1, // Will be overridden dynamically
+    aspectRatio: 1,
     borderRadius: 10,
     overflow: "hidden",
     marginBottom: 10,
+    backgroundColor: "#000",
   },
   gridBackgroundImage: {
     width: "100%",
@@ -732,7 +1125,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     width: "100%",
     height: "100%",
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    backgroundColor: "rgba(0,0,0,0.25)",
   },
   gridCell: {
     justifyContent: "center",
@@ -747,29 +1140,39 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderTopColor: "rgba(255, 255, 255, 0.9)",
     borderBottomColor: "rgba(255, 255, 255, 0.9)",
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    backgroundColor: "rgba(255,255,255,0.03)",
   },
-  dragInstructionContainer: {
-    position: "absolute",
-    bottom: 10,
-    left: 0,
-    right: 0,
+  aspectRatioButton: {
+    padding: 0,
+    margin: 5,
+  },
+  aspectRatioBox: {
+    backgroundColor: "#000",
+    padding: 20,
+    borderRadius: 8,
     alignItems: "center",
+    justifyContent: "center",
+    minWidth: 80,
+    minHeight: 60,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  dragInstruction: {
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
+  aspectRatioBoxActive: {
+    backgroundColor: "#376161",
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  aspectRatioText: {
     color: "#fff",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 16,
+    fontFamily: "Lato_700Bold",
   },
-  gridHint: {
-    fontSize: 12,
-    color: "#888",
-    fontStyle: "italic",
-    textAlign: "center",
+  aspectRatioTextActive: {
+    fontSize: 18,
   },
   generateSection: {
     marginTop: 10,
@@ -780,43 +1183,55 @@ const styles = StyleSheet.create({
     padding: 30,
     backgroundColor: "#f9f9f9",
     borderRadius: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   loadingText: {
     fontSize: 16,
-    fontWeight: "600",
+    fontFamily: "Lato_700Bold",
     color: "#333",
     marginTop: 15,
     marginBottom: 20,
   },
   progressBarContainer: {
     width: "100%",
-    height: 8,
+    height: 10,
     backgroundColor: "#e0e0e0",
-    borderRadius: 4,
+    borderRadius: 5,
     overflow: "hidden",
     marginBottom: 10,
   },
   progressBar: {
     height: "100%",
-    backgroundColor: "#007AFF",
-    borderRadius: 4,
+    backgroundColor: "#376161",
+    borderRadius: 5,
   },
   progressText: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#007AFF",
+    fontFamily: "Lato_700Bold",
+    color: "#376161",
   },
   generateButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: "#376161",
     paddingVertical: 16,
     paddingHorizontal: 32,
-    borderRadius: 10,
+    borderRadius: 30,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 5,
   },
   generateButtonText: {
     color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 17,
+    fontFamily: "Lato_700Bold",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
 });
