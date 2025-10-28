@@ -274,6 +274,8 @@ export default function CarouselConfigScreen({
       });
 
       // Calculate dimensions for each carousel image with high precision
+      // Apply the slider percentage to determine the actual crop size
+      const sizeMultiplier = gridWidthPercentage / 100;
       let cropWidth: number;
       let cropHeight: number;
 
@@ -285,21 +287,31 @@ export default function CarouselConfigScreen({
       // Determine if we should base calculations on width or height
       if (imageAspect <= totalGridAspect) {
         // Image is NOT wide enough - use WIDTH as constraint (fill width, crop top/bottom)
-        cropWidth = imageSize.width / splits; // Width per split
+        const maxCropWidth = imageSize.width / splits; // Maximum width per split
+        cropWidth = maxCropWidth * sizeMultiplier; // Apply slider scaling
         cropHeight = cropWidth / targetAspect;
         console.log("Using WIDTH-based calculation (portrait/square image)", {
+          maxCropWidth: maxCropWidth.toFixed(2),
           cropWidth: cropWidth.toFixed(2),
           cropHeight: cropHeight.toFixed(2),
+          sizeMultiplier: sizeMultiplier.toFixed(2),
         });
       } else {
         // Image is TOO wide/landscape - use HEIGHT as constraint (fill height, crop sides)
-        cropHeight = imageSize.height;
-        const totalCropWidth = cropHeight * totalGridAspect;
-        cropWidth = totalCropWidth / splits; // Width per split
+        const maxCropHeight = imageSize.height;
+        const maxTotalCropWidth = maxCropHeight * totalGridAspect;
+        const maxCropWidth = maxTotalCropWidth / splits;
+        
+        cropWidth = maxCropWidth * sizeMultiplier; // Apply slider scaling
+        cropHeight = cropWidth / targetAspect;
+        
         console.log("Using HEIGHT-based calculation (landscape image)", {
-          cropHeight: cropHeight.toFixed(2),
-          totalCropWidth: totalCropWidth.toFixed(2),
+          maxCropHeight: maxCropHeight.toFixed(2),
+          maxTotalCropWidth: maxTotalCropWidth.toFixed(2),
+          maxCropWidth: maxCropWidth.toFixed(2),
           cropWidth: cropWidth.toFixed(2),
+          cropHeight: cropHeight.toFixed(2),
+          sizeMultiplier: sizeMultiplier.toFixed(2),
         });
       }
 
@@ -309,15 +321,24 @@ export default function CarouselConfigScreen({
         totalWidth: (cropWidth * splits).toFixed(2),
       });
 
-      // Calculate vertical offset based on dragged position with high precision
-      const offsetRatio = gridVerticalOffset / previewHeight;
-      let yOffset = offsetRatio * imageSize.height;
+      // Calculate vertical and horizontal offsets based on dragged position with high precision
+      const verticalOffsetRatio = gridVerticalOffset / previewHeight;
+      let yOffset = verticalOffsetRatio * imageSize.height;
       // Ensure it doesn't exceed bounds
       yOffset = Math.max(0, Math.min(yOffset, imageSize.height - cropHeight));
 
-      console.log("Vertical offset calculated", {
+      const horizontalOffsetRatio = gridHorizontalOffset / previewWidth;
+      const totalCropWidth = cropWidth * splits;
+      let xOffsetBase = horizontalOffsetRatio * imageSize.width;
+      // Ensure the entire crop area fits within the image
+      xOffsetBase = Math.max(0, Math.min(xOffsetBase, imageSize.width - totalCropWidth));
+
+      console.log("Offsets calculated", {
         yOffset: yOffset.toFixed(2),
-        offsetRatio: offsetRatio.toFixed(4),
+        xOffsetBase: xOffsetBase.toFixed(2),
+        verticalOffsetRatio: verticalOffsetRatio.toFixed(4),
+        horizontalOffsetRatio: horizontalOffsetRatio.toFixed(4),
+        totalCropWidth: totalCropWidth.toFixed(2),
       });
 
       // Create Pixert album
@@ -364,8 +385,8 @@ export default function CarouselConfigScreen({
       const processedImages = [];
       for (let i = 0; i < splits; i++) {
         // Calculate exact crop region for this split to avoid accumulated rounding errors
-        const exactXStart = i * cropWidth;
-        const exactXEnd = (i + 1) * cropWidth;
+        const exactXStart = xOffsetBase + (i * cropWidth);
+        const exactXEnd = xOffsetBase + ((i + 1) * cropWidth);
 
         // Round to integers for this specific crop
         const xOffset = Math.round(exactXStart);
@@ -472,8 +493,8 @@ export default function CarouselConfigScreen({
 
       // Show success message
       Alert.alert(
-        "Success! 🎉",
         `Carousel images created successfully!\n${splits} images saved to your gallery.`,
+        "",
         [
           {
             text: "OK",
@@ -679,7 +700,7 @@ export default function CarouselConfigScreen({
             accessibilityHint="Opens image picker to select a photo"
           >
             <Text style={styles.uploadButtonText}>
-              {isLoadingImage ? "⏳ Loading..." : "Click to Select Image"}
+              {isLoadingImage ? "Loading..." : "Click to Select Image"}
             </Text>
           </TouchableOpacity>
         )}
@@ -882,7 +903,7 @@ export default function CarouselConfigScreen({
             accessibilityHint="Creates split images from your uploaded photo"
             accessibilityRole="button"
           >
-            <Text style={styles.generateButtonText}>Generate Carousel</Text>
+            <Text style={styles.generateButtonText}>Generate Images</Text>
           </TouchableOpacity>
         )}
       </View>
