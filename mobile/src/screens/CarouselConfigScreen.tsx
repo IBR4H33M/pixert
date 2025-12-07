@@ -13,6 +13,7 @@ import {
   TextInput,
   Animated,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
 import * as MediaLibrary from "expo-media-library";
@@ -661,7 +662,7 @@ export default function CarouselConfigScreen({
   }
 
   return (
-    <View style={styles.backgroundContainer}>
+    <SafeAreaView style={styles.backgroundContainer} edges={["top"]}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -910,7 +911,7 @@ export default function CarouselConfigScreen({
           )}
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

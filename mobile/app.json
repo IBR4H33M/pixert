@@ -5,7 +5,12 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "description": "Create stunning panoramic Instagram carousels in seconds. Split your wide images into perfect carousel posts.",
+    "privacy": "public",
+    "platforms": ["ios", "android"],
     "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
       "backgroundColor": "#97C8C9"
     },
     "icon": "./assets/icon.png",
