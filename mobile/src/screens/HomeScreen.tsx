@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
+  Image,
 } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
@@ -52,28 +53,39 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
   return (
     <View style={styles.container}>
-      <Animated.View
-        style={[
-          styles.content,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }, { translateY: slideAnim }],
-          },
-        ]}
-      >
-        <Text style={styles.welcomeText}>Welcome to Pixert!</Text>
-        <Text style={styles.subtitle}>
-          Create Panoramic carousels in seconds!
-        </Text>
-
-        <TouchableOpacity
-          style={styles.makeCarouselButton}
-          onPress={() => navigation.navigate("CarouselConfig")}
-          activeOpacity={0.8}
+      <View style={styles.centerContent}>
+        <Animated.View
+          style={[
+            styles.content,
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim }, { translateY: slideAnim }],
+            },
+          ]}
         >
-          <Text style={styles.makeCarouselButtonText}>Make Carousel</Text>
-        </TouchableOpacity>
-      </Animated.View>
+          <Text style={styles.welcomeText}>Welcome to Pixert!</Text>
+          <Text style={styles.subtitle}>
+            Create Panoramic carousels in seconds!
+          </Text>
+
+          <TouchableOpacity
+            style={styles.makeCarouselButton}
+            onPress={() => navigation.navigate("CarouselConfig")}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.makeCarouselButtonText}>Make Carousel</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+
+      <View style={styles.logoContainer}>
+        <Image
+          source={require("../../assets/images/SOlace_transpa.png")}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        <Text style={styles.studioText}>SOLASE Studio</Text>
+      </View>
     </View>
   );
 }
@@ -81,10 +93,14 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: "#97C8C9",
+    justifyContent: "space-between",
     padding: 20,
+  },
+  centerContent: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   content: {
     alignItems: "center",
@@ -123,5 +139,20 @@ const styles = StyleSheet.create({
     fontFamily: "Lato_700Bold",
     letterSpacing: 0.5,
     textTransform: "uppercase",
+  },
+  logoContainer: {
+    alignItems: "center",
+    paddingBottom: 20,
+  },
+  logo: {
+    width: 120,
+    height: 120,
+    marginBottom: 12,
+  },
+  studioText: {
+    fontSize: 14,
+    color: "#376161",
+    fontFamily: "Lato_700Bold",
+    letterSpacing: 1,
   },
 });

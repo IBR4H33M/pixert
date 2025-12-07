@@ -301,10 +301,10 @@ export default function CarouselConfigScreen({
         const maxCropHeight = imageSize.height;
         const maxTotalCropWidth = maxCropHeight * totalGridAspect;
         const maxCropWidth = maxTotalCropWidth / splits;
-        
+
         cropWidth = maxCropWidth * sizeMultiplier; // Apply slider scaling
         cropHeight = cropWidth / targetAspect;
-        
+
         console.log("Using HEIGHT-based calculation (landscape image)", {
           maxCropHeight: maxCropHeight.toFixed(2),
           maxTotalCropWidth: maxTotalCropWidth.toFixed(2),
@@ -331,7 +331,10 @@ export default function CarouselConfigScreen({
       const totalCropWidth = cropWidth * splits;
       let xOffsetBase = horizontalOffsetRatio * imageSize.width;
       // Ensure the entire crop area fits within the image
-      xOffsetBase = Math.max(0, Math.min(xOffsetBase, imageSize.width - totalCropWidth));
+      xOffsetBase = Math.max(
+        0,
+        Math.min(xOffsetBase, imageSize.width - totalCropWidth)
+      );
 
       console.log("Offsets calculated", {
         yOffset: yOffset.toFixed(2),
@@ -385,8 +388,8 @@ export default function CarouselConfigScreen({
       const processedImages = [];
       for (let i = 0; i < splits; i++) {
         // Calculate exact crop region for this split to avoid accumulated rounding errors
-        const exactXStart = xOffsetBase + (i * cropWidth);
-        const exactXEnd = xOffsetBase + ((i + 1) * cropWidth);
+        const exactXStart = xOffsetBase + i * cropWidth;
+        const exactXEnd = xOffsetBase + (i + 1) * cropWidth;
 
         // Round to integers for this specific crop
         const xOffset = Math.round(exactXStart);
@@ -658,263 +661,267 @@ export default function CarouselConfigScreen({
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      scrollEnabled={true}
-    >
-      <Text style={styles.title}>CONFIGURE IMAGES</Text>
-
-      {/* Image Upload Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          {imageUri ? "UPLOADED IMAGE" : "UPLOAD IMAGE"}
-        </Text>
-        {imageUri ? (
-          <View>
-            <View style={styles.uploadedImageContainer}>
-              <Image
-                source={{ uri: imageUri }}
-                style={styles.uploadedImage}
-                resizeMode="contain"
-              />
+    <View style={styles.backgroundContainer}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        scrollEnabled={true}
+      >
+        {/* Image Upload Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            {imageUri ? "UPLOADED IMAGE" : "UPLOAD IMAGE"}
+          </Text>
+          {imageUri ? (
+            <View>
+              <View style={styles.uploadedImageContainer}>
+                <Image
+                  source={{ uri: imageUri }}
+                  style={styles.uploadedImage}
+                  resizeMode="contain"
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.changeImageButton}
+                onPress={pickImage}
+                disabled={isLoadingImage}
+                accessibilityLabel="Change image"
+                accessibilityHint="Opens image picker to select a different photo"
+              >
+                <Text style={styles.changeImageButtonText}>
+                  {isLoadingImage ? "Loading..." : "Change Image"}
+                </Text>
+              </TouchableOpacity>
             </View>
+          ) : (
             <TouchableOpacity
-              style={styles.changeImageButton}
+              style={styles.uploadButton}
               onPress={pickImage}
               disabled={isLoadingImage}
-              accessibilityLabel="Change image"
-              accessibilityHint="Opens image picker to select a different photo"
+              accessibilityLabel="Upload an image for carousel splitting"
+              accessibilityHint="Opens image picker to select a photo"
             >
-              <Text style={styles.changeImageButtonText}>
-                {isLoadingImage ? "Loading..." : "Change Image"}
+              <Text style={styles.uploadButtonText}>
+                {isLoadingImage ? "Loading..." : "Click to Select Image"}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Single Preview removed here to keep only the grid preview below */}
+
+        {/* Number of Splits Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>NUMBER OF SPLITS</Text>
+          <View style={styles.splitControlContainer}>
+            <TouchableOpacity
+              style={styles.arrowButton}
+              onPress={() => {
+                if (selectedSplits > 2) {
+                  setSelectedSplits(selectedSplits - 1);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }
+              }}
+              disabled={selectedSplits <= 2}
+              accessibilityLabel="Decrease split count"
+              accessibilityRole="button"
+            >
+              <Text
+                style={[
+                  styles.arrowButtonText,
+                  selectedSplits <= 2 && styles.arrowButtonDisabled,
+                ]}
+              >
+                &lt;
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.splitNumberBox}>
+              <Text style={styles.splitNumberText}>{selectedSplits}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.arrowButton}
+              onPress={() => {
+                if (selectedSplits < 10) {
+                  setSelectedSplits(selectedSplits + 1);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }
+              }}
+              disabled={selectedSplits >= 10}
+              accessibilityLabel="Increase split count"
+              accessibilityRole="button"
+            >
+              <Text
+                style={[
+                  styles.arrowButtonText,
+                  selectedSplits >= 10 && styles.arrowButtonDisabled,
+                ]}
+              >
+                &gt;
               </Text>
             </TouchableOpacity>
           </View>
-        ) : (
-          <TouchableOpacity
-            style={styles.uploadButton}
-            onPress={pickImage}
-            disabled={isLoadingImage}
-            accessibilityLabel="Upload an image for carousel splitting"
-            accessibilityHint="Opens image picker to select a photo"
-          >
-            <Text style={styles.uploadButtonText}>
-              {isLoadingImage ? "Loading..." : "Click to Select Image"}
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Single Preview removed here to keep only the grid preview below */}
-
-      {/* Number of Splits Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>NUMBER OF SPLITS</Text>
-        <View style={styles.splitControlContainer}>
-          <TouchableOpacity
-            style={styles.arrowButton}
-            onPress={() => {
-              if (selectedSplits > 2) {
-                setSelectedSplits(selectedSplits - 1);
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }
-            }}
-            disabled={selectedSplits <= 2}
-            accessibilityLabel="Decrease split count"
-            accessibilityRole="button"
-          >
-            <Text
-              style={[
-                styles.arrowButtonText,
-                selectedSplits <= 2 && styles.arrowButtonDisabled,
-              ]}
-            >
-              &lt;
-            </Text>
-          </TouchableOpacity>
-
-          <View style={styles.splitNumberBox}>
-            <Text style={styles.splitNumberText}>{selectedSplits}</Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.arrowButton}
-            onPress={() => {
-              if (selectedSplits < 10) {
-                setSelectedSplits(selectedSplits + 1);
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }
-            }}
-            disabled={selectedSplits >= 10}
-            accessibilityLabel="Increase split count"
-            accessibilityRole="button"
-          >
-            <Text
-              style={[
-                styles.arrowButtonText,
-                selectedSplits >= 10 && styles.arrowButtonDisabled,
-              ]}
-            >
-              &gt;
-            </Text>
-          </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Aspect Ratio Selection */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>ASPECT RATIO OF EACH IMAGE</Text>
-        <View style={styles.optionsRow}>
-          {(["3:4", "4:5", "1:1"] as AspectRatio[]).map((ratio) => {
-            const [width, height] = ratio.split(":").map(Number);
-            const aspectValue = width / height;
-            return (
-              <TouchableOpacity
-                key={ratio}
-                style={styles.aspectRatioButton}
-                onPress={() => {
-                  setAspectRatio(ratio);
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
-                accessibilityLabel={`Aspect ratio ${ratio}`}
-                accessibilityRole="button"
-                accessibilityState={{ selected: aspectRatio === ratio }}
-              >
-                <View
-                  style={[
-                    styles.aspectRatioBox,
-                    { aspectRatio: aspectValue },
-                    aspectRatio === ratio && styles.aspectRatioBoxActive,
-                  ]}
+        {/* Aspect Ratio Selection */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>ASPECT RATIO OF EACH IMAGE</Text>
+          <View style={styles.optionsRow}>
+            {(["3:4", "4:5", "1:1"] as AspectRatio[]).map((ratio) => {
+              const [width, height] = ratio.split(":").map(Number);
+              const aspectValue = width / height;
+              return (
+                <TouchableOpacity
+                  key={ratio}
+                  style={styles.aspectRatioButton}
+                  onPress={() => {
+                    setAspectRatio(ratio);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                  accessibilityLabel={`Aspect ratio ${ratio}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: aspectRatio === ratio }}
                 >
-                  <Text
-                    style={[
-                      styles.aspectRatioText,
-                      aspectRatio === ratio && styles.aspectRatioTextActive,
-                    ]}
-                  >
-                    {ratio}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* Carousel Size Slider - Only show if image is selected */}
-      {imageUri && splits > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>CAROUSEL SIZE</Text>
-          <View style={styles.sliderContainer}>
-            <Text style={styles.sliderLabel}>Smaller</Text>
-            <Slider
-              style={styles.slider}
-              minimumValue={50}
-              maximumValue={100}
-              value={gridWidthPercentage}
-              onValueChange={(value) => setGridWidthPercentage(value)}
-              onSlidingComplete={() =>
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-              }
-              minimumTrackTintColor="#376161"
-              maximumTrackTintColor="#ddd"
-              thumbTintColor="#376161"
-            />
-            <Text style={styles.sliderLabel}>Bigger</Text>
-          </View>
-          <Text style={styles.sliderValue}>
-            {Math.round(gridWidthPercentage)}%
-          </Text>
-        </View>
-      )}
-
-      {/* Grid Preview - Only show if image is selected */}
-      {imageUri && splits > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>DRAG THE GRID TO ALIGN</Text>
-          <View
-            style={[styles.gridPreview, { aspectRatio: imageAspectRatio }]}
-            onLayout={(event) => {
-              const { height, width } = event.nativeEvent.layout;
-              setPreviewHeight(height);
-              setPreviewWidth(width);
-            }}
-          >
-            <Image
-              source={{ uri: imageUri }}
-              style={styles.gridBackgroundImage}
-              resizeMode="contain"
-            />
-            {/* Draggable Grid Overlay */}
-            <View
-              style={[
-                styles.gridContainer,
-                {
-                  top: getGridTopPosition(),
-                  left: getGridLeftPosition(),
-                  height: gridHeight,
-                  width: gridWidth,
-                },
-              ]}
-              {...panResponder.panHandlers}
-            >
-              <View style={styles.gridOverlay}>
-                {Array.from({ length: splits }).map((_, index) => (
                   <View
-                    key={index}
                     style={[
-                      styles.gridCell,
-                      {
-                        width: `${100 / splits}%`,
-                        aspectRatio:
-                          aspectDimensions.width / aspectDimensions.height,
-                        borderLeftWidth: index === 0 ? 2 : 0,
-                        borderLeftColor: "rgba(255, 255, 255, 0.9)",
-                      },
+                      styles.aspectRatioBox,
+                      { aspectRatio: aspectValue },
+                      aspectRatio === ratio && styles.aspectRatioBoxActive,
                     ]}
                   >
-                    <View style={styles.gridBorder} />
+                    <Text
+                      style={[
+                        styles.aspectRatioText,
+                        aspectRatio === ratio && styles.aspectRatioTextActive,
+                      ]}
+                    >
+                      {ratio}
+                    </Text>
                   </View>
-                ))}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Carousel Size Slider - Only show if image is selected */}
+        {imageUri && splits > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>CAROUSEL SIZE</Text>
+            <View style={styles.sliderContainer}>
+              <Text style={styles.sliderLabel}>Smaller</Text>
+              <Slider
+                style={styles.slider}
+                minimumValue={50}
+                maximumValue={100}
+                value={gridWidthPercentage}
+                onValueChange={(value) => setGridWidthPercentage(value)}
+                onSlidingComplete={() =>
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                }
+                minimumTrackTintColor="#376161"
+                maximumTrackTintColor="#ddd"
+                thumbTintColor="#376161"
+              />
+              <Text style={styles.sliderLabel}>Bigger</Text>
+            </View>
+            <Text style={styles.sliderValue}>
+              {Math.round(gridWidthPercentage)}%
+            </Text>
+          </View>
+        )}
+
+        {/* Grid Preview - Only show if image is selected */}
+        {imageUri && splits > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>DRAG THE GRID TO ALIGN</Text>
+            <View
+              style={[styles.gridPreview, { aspectRatio: imageAspectRatio }]}
+              onLayout={(event) => {
+                const { height, width } = event.nativeEvent.layout;
+                setPreviewHeight(height);
+                setPreviewWidth(width);
+              }}
+            >
+              <Image
+                source={{ uri: imageUri }}
+                style={styles.gridBackgroundImage}
+                resizeMode="contain"
+              />
+              {/* Draggable Grid Overlay */}
+              <View
+                style={[
+                  styles.gridContainer,
+                  {
+                    top: getGridTopPosition(),
+                    left: getGridLeftPosition(),
+                    height: gridHeight,
+                    width: gridWidth,
+                  },
+                ]}
+                {...panResponder.panHandlers}
+              >
+                <View style={styles.gridOverlay}>
+                  {Array.from({ length: splits }).map((_, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.gridCell,
+                        {
+                          width: `${100 / splits}%`,
+                          aspectRatio:
+                            aspectDimensions.width / aspectDimensions.height,
+                          borderLeftWidth: index === 0 ? 2 : 0,
+                          borderLeftColor: "rgba(255, 255, 255, 0.9)",
+                        },
+                      ]}
+                    >
+                      <View style={styles.gridBorder} />
+                    </View>
+                  ))}
+                </View>
               </View>
             </View>
           </View>
-        </View>
-      )}
-
-      {/* Generate Button */}
-      <View style={styles.generateSection}>
-        {isGenerating ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.loadingText}>Generating carousel...</Text>
-            <View style={styles.progressBarContainer}>
-              <View style={[styles.progressBar, { width: `${progress}%` }]} />
-            </View>
-            <Text style={styles.progressText}>{Math.round(progress)}%</Text>
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={styles.generateButton}
-            onPress={handleGenerate}
-            accessibilityLabel="Generate carousel images"
-            accessibilityHint="Creates split images from your uploaded photo"
-            accessibilityRole="button"
-          >
-            <Text style={styles.generateButtonText}>Generate Images</Text>
-          </TouchableOpacity>
         )}
-      </View>
-    </ScrollView>
+
+        {/* Generate Button */}
+        <View style={styles.generateSection}>
+          {isGenerating ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#007AFF" />
+              <Text style={styles.loadingText}>Generating carousel...</Text>
+              <View style={styles.progressBarContainer}>
+                <View style={[styles.progressBar, { width: `${progress}%` }]} />
+              </View>
+              <Text style={styles.progressText}>{Math.round(progress)}%</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.generateButton}
+              onPress={handleGenerate}
+              accessibilityLabel="Generate carousel images"
+              accessibilityHint="Creates split images from your uploaded photo"
+              accessibilityRole="button"
+            >
+              <Text style={styles.generateButtonText}>Generate Images</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  backgroundContainer: {
+    flex: 1,
+    backgroundColor: "#97C8C9",
+  },
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "transparent",
   },
   content: {
     padding: 20,

@@ -6,15 +6,31 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#97C8C9"
     },
+    "icon": "./assets/icon.png",
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.pixert.app"
     },
     "android": {
-      "package": "com.pixert.app"
-    }
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#97C8C9"
+      },
+      "package": "com.pixert.app",
+      "versionCode": 1
+    },
+    "plugins": [
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Pixert to save carousel images to your photo library.",
+          "savePhotosPermission": "Allow Pixert to save carousel images to your photo library.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
+    ]
   }
 }

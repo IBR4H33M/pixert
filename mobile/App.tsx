@@ -18,12 +18,12 @@ export default function App() {
         <Stack.Screen
           name="Home"
           component={HomeScreen}
-          options={{ title: "Pixert" }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="CarouselConfig"
           component={CarouselConfigScreen}
-          options={{ title: "Create Carousel" }}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>
