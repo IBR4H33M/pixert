@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Animated,
   Image,
+  Linking,
 } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
@@ -24,6 +25,10 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   let [fontsLoaded] = useFonts({
     Lato_700Bold,
   });
+
+  const openWebsite = () => {
+    Linking.openURL("https://solase.studio");
+  };
 
   useEffect(() => {
     // Parallel animations for smooth entry
@@ -64,28 +69,39 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           ]}
         >
           <Text style={styles.welcomeText}>Welcome to Pixert!</Text>
-          <Text style={styles.subtitle}>
-            Create Panoramic carousels in seconds!
-          </Text>
 
           <TouchableOpacity
-            style={styles.makeCarouselButton}
+            style={styles.optionButton}
             onPress={() => navigation.navigate("CarouselConfig")}
             activeOpacity={0.8}
           >
-            <Text style={styles.makeCarouselButtonText}>Make Carousel</Text>
+            <Text style={styles.optionButtonText}>
+              Create Panoramic Carousel
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.optionButton}
+            onPress={() => navigation.navigate("GridConfig")}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.optionButtonText}>Create Grid Layout</Text>
           </TouchableOpacity>
         </Animated.View>
       </View>
 
-      <View style={styles.logoContainer}>
+      <TouchableOpacity
+        style={styles.logoContainer}
+        onPress={openWebsite}
+        activeOpacity={0.7}
+      >
         <Image
           source={require("../../assets/images/SOlace_transpa.png")}
           style={styles.logo}
           resizeMode="contain"
         />
         <Text style={styles.studioText}>SOLASE Studio</Text>
-      </View>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -108,23 +124,16 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: 32,
     fontFamily: "Lato_700Bold",
-    marginBottom: 12,
+    marginBottom: 40,
     color: "#203838",
     textAlign: "center",
     letterSpacing: 0.5,
   },
-  subtitle: {
-    fontSize: 16,
-    color: "#666",
-    marginBottom: 50,
-    textAlign: "center",
-    lineHeight: 24,
-  },
-  makeCarouselButton: {
+  optionButton: {
     backgroundColor: "#376161",
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    borderRadius: 30,
+    paddingVertical: 20,
+    paddingHorizontal: 40,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
@@ -132,13 +141,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 5,
     elevation: 5,
+    marginBottom: 20,
+    width: "100%",
   },
-  makeCarouselButtonText: {
+  optionButtonText: {
     color: "#fff",
-    fontSize: 17,
+    fontSize: 16,
     fontFamily: "Lato_700Bold",
     letterSpacing: 0.5,
-    textTransform: "uppercase",
   },
   logoContainer: {
     alignItems: "center",

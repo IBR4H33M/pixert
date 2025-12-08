@@ -3,3 +3,28 @@ node_modules/
 *.log
 .vscode/*
 !.vscode/extensions.json
+
+# IDE
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+# OS
+%ProgramData%/
+Thumbs.db
+
+# Expo
+.expo/
+.expo-shared/
+
+# Build outputs
+dist/
+build/
+*.tgz
+
+# Environment
+.env
+.env.local
+.env.*.local
