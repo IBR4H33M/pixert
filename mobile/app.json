@@ -6,8 +6,8 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "description": "Create stunning panoramic Instagram carousels in seconds. Split your wide images into perfect carousel posts.",
-    "privacy": "public",
     "platforms": ["ios", "android"],
+    "sdkVersion": "54.0.0",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -25,7 +25,15 @@
         "backgroundColor": "#97C8C9"
       },
       "package": "com.pixert.app",
-      "versionCode": 1
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
+      ]
     },
     "plugins": [
       [
@@ -36,6 +44,11 @@
           "isAccessMediaLocationEnabled": true
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d5ea98a3-1a0d-4cfc-b2de-16f48f4d393d"
+      }
+    }
   }
 }

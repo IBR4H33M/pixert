@@ -1,0 +1,11 @@
+# Don't upload these files/folders to EAS Build
+node_modules/
+.expo/
+.idea/
+*.log
+*.lock
+.git/
+android/
+ios/
+.gradle/
+%ProgramData%/
