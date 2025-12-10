@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   Animated,
   Image,
   Linking,
+  Modal,
+  ScrollView,
 } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
@@ -17,10 +19,15 @@ type HomeScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, "Home">;
 };
 
+type TutorialType = "panoramic" | "grid" | null;
+
 export default function HomeScreen({ navigation }: HomeScreenProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+
+  const [tutorialVisible, setTutorialVisible] = useState(false);
+  const [tutorialType, setTutorialType] = useState<TutorialType>(null);
 
   let [fontsLoaded] = useFonts({
     Lato_700Bold,
@@ -28,6 +35,51 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
   const openWebsite = () => {
     Linking.openURL("https://solase.studio");
+  };
+
+  const openEmail = () => {
+    Linking.openURL("mailto:contact@solase.studio");
+  };
+
+  const openTutorial = (type: TutorialType) => {
+    setTutorialType(type);
+    setTutorialVisible(true);
+  };
+
+  const closeTutorial = () => {
+    setTutorialVisible(false);
+    setTutorialType(null);
+  };
+
+  const getTutorialContent = () => {
+    if (tutorialType === "panoramic") {
+      return {
+        title: "How to Create Panoramic Splits",
+        steps: [
+          "Upload your image to be split",
+          "Select the number of splits you want (2-10)",
+          "Choose your desired aspect ratio (3:4, 4:5, or 1:1)",
+          "Adjust the carousel size using the slider",
+          "Drag the grid overlay to position your crop area",
+          "Tap 'Generate Images' to create your carousel",
+          "Upload to Instagram in reverse order for best results!",
+        ],
+      };
+    } else {
+      return {
+        title: "How to Create Grid Splits",
+        steps: [
+          "Step 1: Upload your image from your gallery",
+          "Step 2: Select grid dimension (2x2, 3x2, or 3x3)",
+          "Step 3: Aspect ratio is auto-selected based on grid size",
+          "Step 4: Adjust the grid size using the slider (50-100%)",
+          "Step 5: Drag the grid overlay to position your crop area",
+          "Step 6: Tap 'Generate Images' to create your grid",
+          "Step 7: Images will be saved to your gallery in the 'Pixert' album",
+          "Step 8: Upload to Instagram/Facebook in order for perfect grid!",
+        ],
+      };
+    }
   };
 
   useEffect(() => {
@@ -70,23 +122,53 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         >
           <Text style={styles.welcomeText}>Welcome to Pixert!</Text>
 
-          <TouchableOpacity
-            style={styles.optionButton}
-            onPress={() => navigation.navigate("CarouselConfig")}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.optionButtonText}>
-              Create Panoramic Carousel
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.buttonWrapper}>
+            <TouchableOpacity
+              style={styles.optionButton}
+              onPress={() => navigation.navigate("CarouselConfig")}
+              activeOpacity={0.8}
+            >
+              <Image
+                source={require("../../assets/images/pan.png")}
+                style={styles.buttonIcon}
+                resizeMode="contain"
+              />
+              <View style={styles.divider} />
+              <Text style={styles.optionButtonText}>
+                Create Panoramic Splits
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.helpIcon}
+              onPress={() => openTutorial("panoramic")}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.helpIconText}>?</Text>
+            </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity
-            style={styles.optionButton}
-            onPress={() => navigation.navigate("GridConfig")}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.optionButtonText}>Create Grid Layout</Text>
-          </TouchableOpacity>
+          <View style={styles.buttonWrapper}>
+            <TouchableOpacity
+              style={styles.optionButton}
+              onPress={() => navigation.navigate("GridConfig")}
+              activeOpacity={0.8}
+            >
+              <Image
+                source={require("../../assets/images/grid.png")}
+                style={styles.buttonIcon}
+                resizeMode="contain"
+              />
+              <View style={styles.divider} />
+              <Text style={styles.optionButtonText}>Create Grid Splits</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.helpIcon}
+              onPress={() => openTutorial("grid")}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.helpIconText}>?</Text>
+            </TouchableOpacity>
+          </View>
         </Animated.View>
       </View>
 
@@ -102,6 +184,68 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         />
         <Text style={styles.studioText}>SOLASE Studio</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.contactButton}
+        onPress={openEmail}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.contactButtonText}>Contact Us</Text>
+      </TouchableOpacity>
+
+      {/* Tutorial Modal */}
+      <Modal
+        visible={tutorialVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeTutorial}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {getTutorialContent().title}
+              </Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={closeTutorial}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalScrollView}
+              contentContainerStyle={styles.modalScrollContent}
+            >
+              {/* Tutorial GIF/Video at the top */}
+              {tutorialType === "panoramic" && (
+                <>
+                  <Image
+                    source={require("../../assets/pan.gif")}
+                    style={styles.tutorialGif}
+                    resizeMode="cover"
+                  />
+                  <Text style={styles.tutorialDescription}>
+                    This feature is best for cropping an image into multiple
+                    parts for posting a seamless horizontal carousel in
+                    Instagram.
+                  </Text>
+                </>
+              )}
+
+              {getTutorialContent().steps.map((step, index) => (
+                <View key={index} style={styles.stepContainer}>
+                  <View style={styles.stepNumber}>
+                    <Text style={styles.stepNumberText}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.stepText}>{step}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -120,6 +264,15 @@ const styles = StyleSheet.create({
   },
   content: {
     alignItems: "center",
+    width: "100%",
+    maxWidth: 400,
+  },
+  buttonWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    marginBottom: 20,
+    gap: 8,
   },
   welcomeText: {
     fontSize: 32,
@@ -130,25 +283,57 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   optionButton: {
+    flex: 1,
     backgroundColor: "#376161",
     paddingVertical: 20,
-    paddingHorizontal: 40,
+    paddingHorizontal: 20,
     borderRadius: 15,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
     shadowRadius: 5,
     elevation: 5,
-    marginBottom: 20,
-    width: "100%",
+    gap: 12,
+  },
+  helpIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  helpIconText: {
+    fontSize: 24,
+    fontFamily: "Lato_700Bold",
+    color: "#376161",
   },
   optionButtonText: {
     color: "#fff",
     fontSize: 16,
     fontFamily: "Lato_700Bold",
     letterSpacing: 0.5,
+    flex: 1,
+    flexShrink: 1,
+  },
+  buttonIcon: {
+    width: 32,
+    height: 32,
+    flexShrink: 0,
+  },
+  divider: {
+    width: 2,
+    height: 32,
+    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    flexShrink: 0,
   },
   logoContainer: {
     alignItems: "center",
@@ -164,5 +349,133 @@ const styles = StyleSheet.create({
     color: "#376161",
     fontFamily: "Lato_700Bold",
     letterSpacing: 1,
+  },
+  contactButton: {
+    backgroundColor: "#fff",
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 5,
+    marginBottom: 20,
+    marginHorizontal: 20,
+  },
+  contactButtonText: {
+    color: "#376161",
+    fontSize: 16,
+    fontFamily: "Lato_700Bold",
+    letterSpacing: 0.5,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    width: "100%",
+    maxHeight: "85%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: "Lato_700Bold",
+    color: "#376161",
+    flex: 1,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#f0f0f0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  closeButtonText: {
+    fontSize: 24,
+    color: "#666",
+    fontWeight: "300",
+  },
+  modalScrollView: {
+    maxHeight: "100%",
+  },
+  modalScrollContent: {
+    padding: 20,
+  },
+  tutorialGif: {
+    width: "100%",
+    height: 250,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  tutorialDescription: {
+    fontSize: 15,
+    color: "#555",
+    lineHeight: 22,
+    marginBottom: 24,
+    textAlign: "center",
+  },
+  stepContainer: {
+    flexDirection: "row",
+    marginBottom: 20,
+    alignItems: "flex-start",
+  },
+  stepNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#376161",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  stepNumberText: {
+    fontSize: 16,
+    fontFamily: "Lato_700Bold",
+    color: "#fff",
+  },
+  stepText: {
+    flex: 1,
+    fontSize: 15,
+    color: "#333",
+    lineHeight: 22,
+    paddingTop: 5,
+  },
+  placeholderBox: {
+    marginTop: 20,
+    padding: 40,
+    backgroundColor: "#f5f5f5",
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#e0e0e0",
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  placeholderText: {
+    fontSize: 14,
+    color: "#999",
+    textAlign: "center",
   },
 });
