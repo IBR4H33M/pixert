@@ -262,27 +262,34 @@ export default function GridConfigScreen({
         }
       }
 
-      // Create grid layout
+      // Create grid layout with cumulative positioning to avoid gaps
       const processedImages = [];
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          const exactXStart = xOffset + col * cellWidth;
-          const exactYStart = yOffset + row * cellHeight;
+      let currentX = xOffset;
+      let currentY = yOffset;
 
-          const thisXOffset = Math.round(exactXStart);
-          const thisYOffset = Math.round(exactYStart);
-          const thisWidth = Math.round(cellWidth);
-          const thisHeight = Math.round(cellHeight);
+      for (let row = 0; row < rows; row++) {
+        currentX = xOffset; // Reset X for each row
+        for (let col = 0; col < cols; col++) {
+          // Calculate tile dimensions
+          const tileWidth =
+            col === cols - 1
+              ? Math.round(xOffset + cellWidth * cols) - Math.round(currentX) // Last column takes remaining width
+              : Math.round(currentX + cellWidth) - Math.round(currentX);
+
+          const tileHeight =
+            row === rows - 1
+              ? Math.round(yOffset + cellHeight * rows) - Math.round(currentY) // Last row takes remaining height
+              : Math.round(currentY + cellHeight) - Math.round(currentY);
 
           const croppedImage = await ImageManipulator.manipulateAsync(
             imageUri,
             [
               {
                 crop: {
-                  originX: thisXOffset,
-                  originY: thisYOffset,
-                  width: thisWidth,
-                  height: thisHeight,
+                  originX: Math.round(currentX),
+                  originY: Math.round(currentY),
+                  width: tileWidth,
+                  height: tileHeight,
                 },
               },
             ],
@@ -291,7 +298,10 @@ export default function GridConfigScreen({
 
           processedImages.push(croppedImage.uri);
           setProgress(50 + (processedImages.length / totalCells) * 40);
+
+          currentX += cellWidth; // Move to next column
         }
+        currentY += cellHeight; // Move to next row
       }
 
       // Save all images

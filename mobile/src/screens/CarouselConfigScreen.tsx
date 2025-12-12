@@ -385,25 +385,24 @@ export default function CarouselConfigScreen({
         }
       }
 
-      // Process all images and collect them before saving to avoid multiple permission prompts
+      // Process all images with cumulative positioning to avoid gaps
       const processedImages = [];
-      for (let i = 0; i < splits; i++) {
-        // Calculate exact crop region for this split to avoid accumulated rounding errors
-        const exactXStart = xOffsetBase + i * cropWidth;
-        const exactXEnd = xOffsetBase + (i + 1) * cropWidth;
+      let currentX = xOffsetBase;
 
-        // Round to integers for this specific crop
-        const xOffset = Math.round(exactXStart);
-        const thisWidth = Math.round(exactXEnd) - Math.round(exactXStart);
-        const thisHeight = Math.round(cropHeight);
-        const thisYOffset = Math.round(yOffset);
+      for (let i = 0; i < splits; i++) {
+        // Calculate tile width - last tile takes remaining width
+        const tileWidth =
+          i === splits - 1
+            ? Math.round(xOffsetBase + cropWidth * splits) -
+              Math.round(currentX)
+            : Math.round(currentX + cropWidth) - Math.round(currentX);
 
         // Crop the image with precise coordinates
         console.log(`Cropping split ${i + 1}/${splits}`, {
-          xOffset,
-          yOffset: thisYOffset,
-          width: thisWidth,
-          height: thisHeight,
+          xOffset: Math.round(currentX),
+          yOffset: Math.round(yOffset),
+          width: tileWidth,
+          height: Math.round(cropHeight),
           sourceImageSize: imageSize,
         });
 
@@ -414,10 +413,10 @@ export default function CarouselConfigScreen({
             [
               {
                 crop: {
-                  originX: xOffset,
-                  originY: thisYOffset,
-                  width: thisWidth,
-                  height: thisHeight,
+                  originX: Math.round(currentX),
+                  originY: Math.round(yOffset),
+                  width: tileWidth,
+                  height: Math.round(cropHeight),
                 },
               },
               // Keep original resolution - no resize for high quality
@@ -440,6 +439,8 @@ export default function CarouselConfigScreen({
         // Update progress for processing
         const processingProgress = 50 + ((i + 1) / splits) * 40;
         setProgress(processingProgress);
+
+        currentX += cropWidth; // Move to next split position
       }
 
       console.log("All images processed, saving to gallery...");
