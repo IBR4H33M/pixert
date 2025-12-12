@@ -41,6 +41,14 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     Linking.openURL("mailto:contact@solase.studio");
   };
 
+  const openYouTubeVideo = () => {
+    const url =
+      tutorialType === "panoramic"
+        ? "https://youtube.com/shorts/sSA3XPC4I1s?feature=share"
+        : "https://youtube.com/shorts/YZkiKKOhrg";
+    Linking.openURL(url);
+  };
+
   const openTutorial = (type: TutorialType) => {
     setTutorialType(type);
     setTutorialVisible(true);
@@ -61,8 +69,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           "Choose your desired aspect ratio (3:4, 4:5, or 1:1)",
           "Adjust the carousel size using the slider",
           "Drag the grid overlay to position your crop area",
-          "Tap 'Generate Images' to create your carousel",
-          "Upload to Instagram in reverse order for best results!",
+          "Tap 'Generate Images' to create your carousel images",
         ],
       };
     } else {
@@ -71,12 +78,9 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         steps: [
           "Step 1: Upload your image from your gallery",
           "Step 2: Select grid dimension (2x2, 3x2, or 3x3)",
-          "Step 3: Aspect ratio is auto-selected based on grid size",
-          "Step 4: Adjust the grid size using the slider (50-100%)",
-          "Step 5: Drag the grid overlay to position your crop area",
-          "Step 6: Tap 'Generate Images' to create your grid",
-          "Step 7: Images will be saved to your gallery in the 'Pixert' album",
-          "Step 8: Upload to Instagram/Facebook in order for perfect grid!",
+          "Step 3: Adjust the grid size using the slider (50-100%)",
+          "Step 4: Drag the grid overlay to position your crop area",
+          "Step 5: Tap 'Generate Images' to create your grid",
         ],
       };
     }
@@ -120,55 +124,53 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             },
           ]}
         >
-          <Text style={styles.welcomeText}>Welcome to Pixert!</Text>
-
-          <View style={styles.buttonWrapper}>
-            <TouchableOpacity
-              style={styles.optionButton}
-              onPress={() => navigation.navigate("CarouselConfig")}
-              activeOpacity={0.8}
-            >
-              <Image
-                source={require("../../assets/images/pan.png")}
-                style={styles.buttonIcon}
-                resizeMode="contain"
-              />
-              <View style={styles.divider} />
-              <Text style={styles.optionButtonText}>
-                Create Panoramic Splits
-              </Text>
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.optionButton}
+            onPress={() => navigation.navigate("CarouselConfig")}
+            activeOpacity={0.8}
+          >
+            <Image
+              source={require("../../assets/images/pan.png")}
+              style={styles.buttonIcon}
+              resizeMode="contain"
+            />
+            <View style={styles.divider} />
+            <Text style={styles.optionButtonText}>Create Panoramic Splits</Text>
             <TouchableOpacity
               style={styles.helpIcon}
-              onPress={() => openTutorial("panoramic")}
+              onPress={(e) => {
+                e.stopPropagation();
+                openTutorial("panoramic");
+              }}
               activeOpacity={0.7}
             >
               <Text style={styles.helpIconText}>?</Text>
             </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
 
-          <View style={styles.buttonWrapper}>
-            <TouchableOpacity
-              style={styles.optionButton}
-              onPress={() => navigation.navigate("GridConfig")}
-              activeOpacity={0.8}
-            >
-              <Image
-                source={require("../../assets/images/grid.png")}
-                style={styles.buttonIcon}
-                resizeMode="contain"
-              />
-              <View style={styles.divider} />
-              <Text style={styles.optionButtonText}>Create Grid Splits</Text>
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.optionButton}
+            onPress={() => navigation.navigate("GridConfig")}
+            activeOpacity={0.8}
+          >
+            <Image
+              source={require("../../assets/images/grid.png")}
+              style={styles.buttonIcon}
+              resizeMode="contain"
+            />
+            <View style={styles.divider} />
+            <Text style={styles.optionButtonText}>Create Grid Splits</Text>
             <TouchableOpacity
               style={styles.helpIcon}
-              onPress={() => openTutorial("grid")}
+              onPress={(e) => {
+                e.stopPropagation();
+                openTutorial("grid");
+              }}
               activeOpacity={0.7}
             >
               <Text style={styles.helpIconText}>?</Text>
             </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         </Animated.View>
       </View>
 
@@ -227,9 +229,24 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                     resizeMode="cover"
                   />
                   <Text style={styles.tutorialDescription}>
-                    This feature is best for cropping an image into multiple
-                    parts for posting a seamless horizontal carousel in
+                    This feature is best for splitting an image into multiple
+                    images for posting a seamless horizontal carousel in
                     Instagram.
+                  </Text>
+                </>
+              )}
+
+              {tutorialType === "grid" && (
+                <>
+                  <Image
+                    source={require("../../assets/grid.gif")}
+                    style={styles.tutorialGif}
+                    resizeMode="contain"
+                  />
+                  <Text style={styles.tutorialDescription}>
+                    Split your image into a grid of tiles, perfect for 2x2
+                    Facebook posts or stunning tiled layouts (3x2 or 3x3) on
+                    Instagram profiles.
                   </Text>
                 </>
               )}
@@ -242,6 +259,16 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                   <Text style={styles.stepText}>{step}</Text>
                 </View>
               ))}
+
+              <TouchableOpacity
+                style={styles.watchTutorialButton}
+                onPress={openYouTubeVideo}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.watchTutorialButtonText}>
+                  Watch Tutorial
+                </Text>
+              </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
@@ -283,7 +310,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   optionButton: {
-    flex: 1,
     backgroundColor: "#376161",
     paddingVertical: 20,
     paddingHorizontal: 20,
@@ -297,6 +323,8 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 5,
     gap: 12,
+    width: "100%",
+    marginBottom: 20,
   },
   helpIcon: {
     width: 44,
@@ -461,6 +489,26 @@ const styles = StyleSheet.create({
     color: "#333",
     lineHeight: 22,
     paddingTop: 5,
+  },
+  watchTutorialButton: {
+    backgroundColor: "#376161",
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  watchTutorialButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontFamily: "Lato_700Bold",
+    letterSpacing: 0.5,
   },
   placeholderBox: {
     marginTop: 20,
