@@ -231,7 +231,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                   <Text style={styles.tutorialDescription}>
                     This feature is best for splitting an image into multiple
                     images for posting a seamless horizontal carousel in
-                    Instagram.
+                    Instagram or other supported platforms.
                   </Text>
                 </>
               )}
