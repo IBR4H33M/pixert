@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   PanResponder,
   Dimensions,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -42,6 +43,14 @@ export default function GridConfigScreen({
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [imageAspectRatio, setImageAspectRatio] = useState(1);
+
+  // Success/Error modal state
+  const [resultModal, setResultModal] = useState<{
+    visible: boolean;
+    type: "success" | "error";
+    title: string;
+    message: string;
+  }>({ visible: false, type: "success", title: "", message: "" });
 
   // Grid preview and dragging states
   const [gridWidthPercentage, setGridWidthPercentage] = useState<number>(100);
@@ -338,23 +347,22 @@ export default function GridConfigScreen({
       clearInterval(progressInterval);
       setProgress(100);
 
-      Alert.alert(
-        `Grid layout created successfully!\n${totalCells} images saved to your gallery.`,
-        "",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              setIsGenerating(false);
-              navigation.navigate("Home");
-            },
-          },
-        ]
-      );
+      setIsGenerating(false);
+      setResultModal({
+        visible: true,
+        type: "success",
+        title: "Grid Created!",
+        message: `${totalCells} images saved to your gallery in the Pixert album.`,
+      });
     } catch (error) {
       console.error("Error generating grid:", error);
-      Alert.alert("Error", "Failed to generate grid layout. Please try again.");
       setIsGenerating(false);
+      setResultModal({
+        visible: true,
+        type: "error",
+        title: "Something Went Wrong",
+        message: "Failed to generate grid layout. Please try again.",
+      });
     }
   };
 
@@ -385,15 +393,32 @@ export default function GridConfigScreen({
     return width / gridAspectRatio;
   };
 
-  // Update grid dimensions when settings change
+  // Update grid dimensions when settings change — fit within BOTH preview width and height
   useEffect(() => {
-    const newGridWidth = (previewWidth * gridWidthPercentage) / 100;
-    const newGridHeight = calculateGridHeight(newGridWidth);
+    if (previewWidth <= 0 || previewHeight <= 0) return;
+    const gridDims = getGridDimensions();
+    const gridAspectRatio = gridDims.width / gridDims.height;
+
+    // Calculate max grid that fits within BOTH preview width and height
+    let maxGridWidth, maxGridHeight;
+    if (previewWidth / previewHeight >= gridAspectRatio) {
+      // Preview is wider than grid ratio — height is the constraint
+      maxGridHeight = previewHeight;
+      maxGridWidth = maxGridHeight * gridAspectRatio;
+    } else {
+      // Preview is taller than grid ratio — width is the constraint
+      maxGridWidth = previewWidth;
+      maxGridHeight = maxGridWidth / gridAspectRatio;
+    }
+
+    const newGridWidth = maxGridWidth * (gridWidthPercentage / 100);
+    const newGridHeight = maxGridHeight * (gridWidthPercentage / 100);
+
     setGridWidth(newGridWidth);
     setGridHeight(newGridHeight);
     gridWidthRef.current = newGridWidth;
     gridHeightRef.current = newGridHeight;
-  }, [aspectRatio, selectedGrid, gridWidthPercentage, previewWidth]);
+  }, [aspectRatio, selectedGrid, gridWidthPercentage, previewWidth, previewHeight]);
 
   // Update preview dimension refs
   useEffect(() => {
@@ -401,7 +426,7 @@ export default function GridConfigScreen({
     previewHeightRef.current = previewHeight;
   }, [previewWidth, previewHeight]);
 
-  // Reset grid position when image or settings change
+  // Reset grid position when image or settings change (not on slider change)
   useEffect(() => {
     if (
       previewWidth > 0 &&
@@ -422,15 +447,25 @@ export default function GridConfigScreen({
       gridVerticalOffsetRef.current = centerVerticalOffset;
       gridHorizontalOffsetRef.current = centerHorizontalOffset;
     }
-  }, [
-    aspectRatio,
-    selectedGrid,
-    imageUri,
-    gridWidth,
-    gridHeight,
-    previewWidth,
-    previewHeight,
-  ]);
+  }, [aspectRatio, selectedGrid, imageUri]); // Only reset on these changes, not gridWidth/gridHeight
+
+  // Clamp grid offset when grid dimensions change (e.g., slider increase while at edge)
+  useEffect(() => {
+    if (previewWidth <= 0 || previewHeight <= 0 || gridWidth <= 0 || gridHeight <= 0) return;
+
+    const maxVerticalOffset = Math.max(0, previewHeight - gridHeight);
+    const maxHorizontalOffset = Math.max(0, previewWidth - gridWidth);
+
+    const clampedV = Math.max(0, Math.min(gridVerticalOffset, maxVerticalOffset));
+    const clampedH = Math.max(0, Math.min(gridHorizontalOffset, maxHorizontalOffset));
+
+    if (clampedV !== gridVerticalOffset || clampedH !== gridHorizontalOffset) {
+      setGridVerticalOffset(clampedV);
+      setGridHorizontalOffset(clampedH);
+      gridVerticalOffsetRef.current = clampedV;
+      gridHorizontalOffsetRef.current = clampedH;
+    }
+  }, [gridWidth, gridHeight, previewWidth, previewHeight]);
 
   // Create pan responder for dragging
   const panResponder = useRef(
@@ -722,6 +757,38 @@ export default function GridConfigScreen({
           )}
         </View>
       </ScrollView>
+
+      {/* Themed Result Modal */}
+      <Modal
+        visible={resultModal.visible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setResultModal({ ...resultModal, visible: false })}
+      >
+        <View style={styles.resultModalOverlay}>
+          <View style={styles.resultModalContent}>
+            <Text style={styles.resultModalIcon}>
+              {resultModal.type === "success" ? "\u2713" : "!"}
+            </Text>
+            <Text style={styles.resultModalTitle}>{resultModal.title}</Text>
+            <Text style={styles.resultModalMessage}>{resultModal.message}</Text>
+            <TouchableOpacity
+              style={[
+                styles.resultModalButton,
+                resultModal.type === "error" && styles.resultModalButtonError,
+              ]}
+              onPress={() => {
+                setResultModal({ ...resultModal, visible: false });
+                if (resultModal.type === "success") {
+                  navigation.navigate("Home");
+                }
+              }}
+            >
+              <Text style={styles.resultModalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -873,7 +940,7 @@ const styles = StyleSheet.create({
     position: "relative",
     width: "100%",
     aspectRatio: 1,
-    borderRadius: 10,
+    borderRadius: 0,
     overflow: "hidden",
     marginBottom: 10,
     backgroundColor: "#000",
@@ -969,6 +1036,64 @@ const styles = StyleSheet.create({
   generateButtonText: {
     color: "#fff",
     fontSize: 17,
+    fontFamily: "Lato_700Bold",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  // Result Modal
+  resultModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 30,
+  },
+  resultModalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 30,
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 320,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  resultModalIcon: {
+    fontSize: 48,
+    color: "#376161",
+    marginBottom: 12,
+    fontWeight: "700",
+  },
+  resultModalTitle: {
+    fontSize: 22,
+    fontFamily: "Lato_700Bold",
+    color: "#376161",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  resultModalMessage: {
+    fontSize: 15,
+    color: "#555",
+    lineHeight: 22,
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  resultModalButton: {
+    backgroundColor: "#376161",
+    paddingVertical: 14,
+    paddingHorizontal: 48,
+    borderRadius: 30,
+    alignItems: "center",
+  },
+  resultModalButtonError: {
+    backgroundColor: "#c0392b",
+  },
+  resultModalButtonText: {
+    color: "#fff",
+    fontSize: 16,
     fontFamily: "Lato_700Bold",
     letterSpacing: 0.5,
     textTransform: "uppercase",

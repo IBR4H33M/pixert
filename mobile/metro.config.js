@@ -20,4 +20,9 @@ config.resolver.extraNodeModules = {
   "@shared": path.resolve(workspaceRoot, "shared/src"),
 };
 
+// Ensure GIF files are recognized as assets
+if (!config.resolver.assetExts.includes("gif")) {
+  config.resolver.assetExts.push("gif");
+}
+
 module.exports = config;

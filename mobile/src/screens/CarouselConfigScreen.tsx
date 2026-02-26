@@ -12,6 +12,7 @@ import {
   PanResponder,
   TextInput,
   Animated,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -82,6 +83,14 @@ export default function CarouselConfigScreen({
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [imageAspectRatio, setImageAspectRatio] = useState(1);
+
+  // Success/Error modal state
+  const [resultModal, setResultModal] = useState<{
+    visible: boolean;
+    type: "success" | "error";
+    title: string;
+    message: string;
+  }>({ visible: false, type: "success", title: "", message: "" });
 
   // Image picker function
   const pickImage = async () => {
@@ -446,27 +455,23 @@ export default function CarouselConfigScreen({
       setProgress(100);
       clearInterval(progressInterval);
 
-      // Show success message
-      Alert.alert(
-        `Carousel images created successfully!\n${splits} images saved to your gallery.`,
-        "",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              setIsGenerating(false);
-              navigation.navigate("Home");
-            },
-          },
-        ]
-      );
+      // Show themed success message
+      setIsGenerating(false);
+      setResultModal({
+        visible: true,
+        type: "success",
+        title: "Carousel Created!",
+        message: `${splits} images saved to your gallery in the Pixert album.`,
+      });
     } catch (error) {
       console.error("Error generating carousel:", error);
-      Alert.alert(
-        "Error",
-        "Failed to generate carousel images. Check console for details."
-      );
       setIsGenerating(false);
+      setResultModal({
+        visible: true,
+        type: "error",
+        title: "Something Went Wrong",
+        message: "Failed to generate carousel images. Please try again.",
+      });
     }
   };
 
@@ -896,6 +901,38 @@ export default function CarouselConfigScreen({
           )}
         </View>
       </ScrollView>
+
+      {/* Themed Result Modal */}
+      <Modal
+        visible={resultModal.visible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setResultModal({ ...resultModal, visible: false })}
+      >
+        <View style={styles.resultModalOverlay}>
+          <View style={styles.resultModalContent}>
+            <Text style={styles.resultModalIcon}>
+              {resultModal.type === "success" ? "\u2713" : "!"}
+            </Text>
+            <Text style={styles.resultModalTitle}>{resultModal.title}</Text>
+            <Text style={styles.resultModalMessage}>{resultModal.message}</Text>
+            <TouchableOpacity
+              style={[
+                styles.resultModalButton,
+                resultModal.type === "error" && styles.resultModalButtonError,
+              ]}
+              onPress={() => {
+                setResultModal({ ...resultModal, visible: false });
+                if (resultModal.type === "success") {
+                  navigation.navigate("Home");
+                }
+              }}
+            >
+              <Text style={styles.resultModalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1236,6 +1273,64 @@ const styles = StyleSheet.create({
   generateButtonText: {
     color: "#fff",
     fontSize: 17,
+    fontFamily: "Lato_700Bold",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  // Result Modal
+  resultModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 30,
+  },
+  resultModalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 30,
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 320,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  resultModalIcon: {
+    fontSize: 48,
+    color: "#376161",
+    marginBottom: 12,
+    fontWeight: "700",
+  },
+  resultModalTitle: {
+    fontSize: 22,
+    fontFamily: "Lato_700Bold",
+    color: "#376161",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  resultModalMessage: {
+    fontSize: 15,
+    color: "#555",
+    lineHeight: 22,
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  resultModalButton: {
+    backgroundColor: "#376161",
+    paddingVertical: 14,
+    paddingHorizontal: 48,
+    borderRadius: 30,
+    alignItems: "center",
+  },
+  resultModalButtonError: {
+    backgroundColor: "#c0392b",
+  },
+  resultModalButtonText: {
+    color: "#fff",
+    fontSize: 16,
     fontFamily: "Lato_700Bold",
     letterSpacing: 0.5,
     textTransform: "uppercase",
