@@ -274,76 +274,26 @@ export default function CarouselConfigScreen({
         targetAspect,
       });
 
-      // Calculate dimensions for each carousel image with high precision
-      // Apply the slider percentage to determine the actual crop size
-      const sizeMultiplier = gridWidthPercentage / 100;
-      let cropWidth: number;
-      let cropHeight: number;
+      // Map preview grid dimensions directly to actual image crop
+      // This ensures generated images exactly match the preview
+      const totalCropWidth = (gridWidth / previewWidth) * imageSize.width;
+      const totalCropHeight = (gridHeight / previewHeight) * imageSize.height;
+      const cropWidth = totalCropWidth / splits;
+      const cropHeight = totalCropHeight;
 
-      // Calculate the total aspect ratio of the grid (splits side by side)
-      const totalGridAspect =
-        (aspectDimensions.width * splits) / aspectDimensions.height;
-      const imageAspect = imageSize.width / imageSize.height;
-
-      // Determine if we should base calculations on width or height
-      if (imageAspect <= totalGridAspect) {
-        // Image is NOT wide enough - use WIDTH as constraint (fill width, crop top/bottom)
-        const maxCropWidth = imageSize.width / splits; // Maximum width per split
-        cropWidth = maxCropWidth * sizeMultiplier; // Apply slider scaling
-        cropHeight = cropWidth / targetAspect;
-        console.log("Using WIDTH-based calculation (portrait/square image)", {
-          maxCropWidth: maxCropWidth.toFixed(2),
-          cropWidth: cropWidth.toFixed(2),
-          cropHeight: cropHeight.toFixed(2),
-          sizeMultiplier: sizeMultiplier.toFixed(2),
-        });
-      } else {
-        // Image is TOO wide/landscape - use HEIGHT as constraint (fill height, crop sides)
-        const maxCropHeight = imageSize.height;
-        const maxTotalCropWidth = maxCropHeight * totalGridAspect;
-        const maxCropWidth = maxTotalCropWidth / splits;
-
-        cropWidth = maxCropWidth * sizeMultiplier; // Apply slider scaling
-        cropHeight = cropWidth / targetAspect;
-
-        console.log("Using HEIGHT-based calculation (landscape image)", {
-          maxCropHeight: maxCropHeight.toFixed(2),
-          maxTotalCropWidth: maxTotalCropWidth.toFixed(2),
-          maxCropWidth: maxCropWidth.toFixed(2),
-          cropWidth: cropWidth.toFixed(2),
-          cropHeight: cropHeight.toFixed(2),
-          sizeMultiplier: sizeMultiplier.toFixed(2),
-        });
-      }
-
-      console.log("Calculated crop dimensions", {
+      console.log("Calculated crop dimensions (mapped from preview)", {
         cropWidth: cropWidth.toFixed(2),
         cropHeight: cropHeight.toFixed(2),
-        totalWidth: (cropWidth * splits).toFixed(2),
-      });
-
-      // Calculate vertical and horizontal offsets based on dragged position with high precision
-      const verticalOffsetRatio = gridVerticalOffset / previewHeight;
-      let yOffset = verticalOffsetRatio * imageSize.height;
-      // Ensure it doesn't exceed bounds
-      yOffset = Math.max(0, Math.min(yOffset, imageSize.height - cropHeight));
-
-      const horizontalOffsetRatio = gridHorizontalOffset / previewWidth;
-      const totalCropWidth = cropWidth * splits;
-      let xOffsetBase = horizontalOffsetRatio * imageSize.width;
-      // Ensure the entire crop area fits within the image
-      xOffsetBase = Math.max(
-        0,
-        Math.min(xOffsetBase, imageSize.width - totalCropWidth)
-      );
-
-      console.log("Offsets calculated", {
-        yOffset: yOffset.toFixed(2),
-        xOffsetBase: xOffsetBase.toFixed(2),
-        verticalOffsetRatio: verticalOffsetRatio.toFixed(4),
-        horizontalOffsetRatio: horizontalOffsetRatio.toFixed(4),
         totalCropWidth: totalCropWidth.toFixed(2),
       });
+
+      // Map preview grid offset to actual image offset
+      let xOffsetBase = (gridHorizontalOffset / previewWidth) * imageSize.width;
+      let yOffset = (gridVerticalOffset / previewHeight) * imageSize.height;
+
+      // Clamp to image bounds
+      xOffsetBase = Math.max(0, Math.min(xOffsetBase, imageSize.width - totalCropWidth));
+      yOffset = Math.max(0, Math.min(yOffset, imageSize.height - totalCropHeight));
 
       // Create Pixert album
       let album;
@@ -533,14 +483,30 @@ export default function CarouselConfigScreen({
 
   // Update grid dimensions when aspect ratio, splits, or width percentage change
   useEffect(() => {
-    const newGridWidth = (previewWidth * gridWidthPercentage) / 100;
-    const newGridHeight = calculateGridHeight(newGridWidth);
+    if (previewWidth <= 0 || previewHeight <= 0) return;
+    const gridAspectRatio = totalGridWidth / totalGridHeight;
+
+    // Calculate max grid that fits within BOTH preview width and height
+    let maxGridWidth, maxGridHeight;
+    if (previewWidth / previewHeight >= gridAspectRatio) {
+      // Preview is wider than grid ratio — height is the constraint
+      maxGridHeight = previewHeight;
+      maxGridWidth = maxGridHeight * gridAspectRatio;
+    } else {
+      // Preview is taller than grid ratio — width is the constraint
+      maxGridWidth = previewWidth;
+      maxGridHeight = maxGridWidth / gridAspectRatio;
+    }
+
+    const newGridWidth = maxGridWidth * (gridWidthPercentage / 100);
+    const newGridHeight = maxGridHeight * (gridWidthPercentage / 100);
+
     setGridWidth(newGridWidth);
     setGridHeight(newGridHeight);
     // Update refs for pan responder
     gridWidthRef.current = newGridWidth;
     gridHeightRef.current = newGridHeight;
-  }, [aspectRatio, splits, gridWidthPercentage, previewWidth]);
+  }, [aspectRatio, splits, gridWidthPercentage, previewWidth, previewHeight]);
 
   // Update preview dimension refs whenever they change
   useEffect(() => {
@@ -572,6 +538,24 @@ export default function CarouselConfigScreen({
       gridHorizontalOffsetRef.current = centerHorizontalOffset;
     }
   }, [aspectRatio, splits, imageUri]); // Only reset on these changes, not gridWidth/gridHeight
+
+  // Clamp grid offset when grid dimensions change (e.g., slider increase while at edge)
+  useEffect(() => {
+    if (previewWidth <= 0 || previewHeight <= 0 || gridWidth <= 0 || gridHeight <= 0) return;
+
+    const maxVerticalOffset = Math.max(0, previewHeight - gridHeight);
+    const maxHorizontalOffset = Math.max(0, previewWidth - gridWidth);
+
+    const clampedV = Math.max(0, Math.min(gridVerticalOffset, maxVerticalOffset));
+    const clampedH = Math.max(0, Math.min(gridHorizontalOffset, maxHorizontalOffset));
+
+    if (clampedV !== gridVerticalOffset || clampedH !== gridHorizontalOffset) {
+      setGridVerticalOffset(clampedV);
+      setGridHorizontalOffset(clampedH);
+      gridVerticalOffsetRef.current = clampedV;
+      gridHorizontalOffsetRef.current = clampedH;
+    }
+  }, [gridWidth, gridHeight, previewWidth, previewHeight]);
 
   // Create pan responder for dragging the grid (both vertical and horizontal)
   const panResponder = useRef(
@@ -1134,7 +1118,7 @@ const styles = StyleSheet.create({
     position: "relative",
     width: "100%",
     aspectRatio: 1,
-    borderRadius: 10,
+    borderRadius: 0,
     overflow: "hidden",
     marginBottom: 10,
     backgroundColor: "#000",
