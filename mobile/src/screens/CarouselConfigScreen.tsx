@@ -16,17 +16,35 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../../App";
+import { RootStackParamList, EditHistoryEntry } from "../../App";
+import { RouteProp, useRoute } from "@react-navigation/native";
 import * as MediaLibrary from "expo-media-library";
 import * as ImageManipulator from "expo-image-manipulator";
-import * as FileSystem from "expo-file-system";
+import { Paths, File } from "expo-file-system";
 import { useFonts, Lato_700Bold } from "@expo-google-fonts/lato";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import Slider from "@react-native-community/slider";
+import { useTheme, ThemeColors } from "../context/ThemeContext";
 
 type CarouselConfigScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, "CarouselConfig">;
+};
+
+const HISTORY_FILE = new File(Paths.document, "pixert_edit_history.json");
+const MAX_HISTORY = 3;
+
+const saveEditHistory = async (entry: EditHistoryEntry) => {
+  let history: EditHistoryEntry[] = [];
+  try {
+    if (HISTORY_FILE.exists) {
+      const raw = await HISTORY_FILE.text();
+      history = JSON.parse(raw);
+    }
+  } catch {}
+  history.unshift(entry);
+  if (history.length > MAX_HISTORY) history = history.slice(0, MAX_HISTORY);
+  HISTORY_FILE.write(JSON.stringify(history));
 };
 
 type AspectRatio = "3:4" | "4:5" | "1:1";
@@ -47,19 +65,33 @@ const getAspectRatioDimensions = (ratio: AspectRatio) => {
 export default function CarouselConfigScreen({
   navigation,
 }: CarouselConfigScreenProps) {
+  const route = useRoute<RouteProp<RootStackParamList, "CarouselConfig">>();
+  const prefill = route.params?.prefill;
+
   // Load Lato font
   const [fontsLoaded] = useFonts({
     Lato_700Bold,
   });
 
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   // Image upload states
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [selectedSplits, setSelectedSplits] = useState<number>(2);
+  const [imageUri, setImageUri] = useState<string | null>(
+    prefill?.imageUri || null,
+  );
+  const [selectedSplits, setSelectedSplits] = useState<number>(
+    prefill?.specs?.splits || 2,
+  );
   const [isLoadingImage, setIsLoadingImage] = useState(false);
 
   // Configuration states
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>("4:5");
-  const [gridWidthPercentage, setGridWidthPercentage] = useState<number>(100); // 50-100%
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>(
+    (prefill?.specs?.aspectRatio as AspectRatio) || "4:5",
+  );
+  const [gridWidthPercentage, setGridWidthPercentage] = useState<number>(
+    prefill?.specs?.gridWidthPercentage ?? 100,
+  ); // 50-100%
   const [previewWidth, setPreviewWidth] = useState<number>(300);
   const [previewHeight, setPreviewHeight] = useState(300);
   const [gridHorizontalOffset, setGridHorizontalOffset] = useState<number>(0);
@@ -101,7 +133,7 @@ export default function CarouselConfigScreen({
     if (status !== "granted") {
       Alert.alert(
         "Permission Required",
-        "Sorry, we need camera roll permissions to upload images!"
+        "Sorry, we need camera roll permissions to upload images!",
       );
       setIsLoadingImage(false);
       return;
@@ -150,7 +182,7 @@ export default function CarouselConfigScreen({
 
   // Helper function to get TRUE image dimensions (not display size)
   const getActualImageSize = async (
-    uri: string
+    uri: string,
   ): Promise<{ width: number; height: number }> => {
     try {
       // Try to get asset info from MediaLibrary first (most reliable for original dimensions)
@@ -169,7 +201,7 @@ export default function CarouselConfigScreen({
         } catch (e) {
           console.warn(
             "MediaLibrary approach failed, trying ImageManipulator:",
-            e
+            e,
           );
         }
       }
@@ -178,7 +210,7 @@ export default function CarouselConfigScreen({
       const imageInfo = await ImageManipulator.manipulateAsync(
         uri,
         [], // No transformations
-        { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+        { compress: 1, format: ImageManipulator.SaveFormat.JPEG },
       );
 
       // Get the size of the manipulated result
@@ -195,7 +227,7 @@ export default function CarouselConfigScreen({
           (error) => {
             console.error(
               "Failed to get image size from manipulated image:",
-              error
+              error,
             );
             // Last resort: regular Image.getSize on original
             Image.getSize(
@@ -207,9 +239,9 @@ export default function CarouselConfigScreen({
                 });
                 resolve({ width, height });
               },
-              reject
+              reject,
             );
-          }
+          },
         );
       });
     } catch (error) {
@@ -222,7 +254,7 @@ export default function CarouselConfigScreen({
             console.warn("Using last resort Image.getSize:", { width, height });
             resolve({ width, height });
           },
-          reject
+          reject,
         );
       });
     }
@@ -238,7 +270,7 @@ export default function CarouselConfigScreen({
     if (splits === 0) {
       Alert.alert(
         "Invalid Input",
-        "Please select or enter a valid number of splits (4-10)."
+        "Please select or enter a valid number of splits (4-10).",
       );
       return;
     }
@@ -252,7 +284,7 @@ export default function CarouselConfigScreen({
       if (status !== "granted") {
         Alert.alert(
           "Permission Required",
-          "We need permission to save images to your gallery."
+          "We need permission to save images to your gallery.",
         );
         setIsGenerating(false);
         return;
@@ -301,13 +333,32 @@ export default function CarouselConfigScreen({
       let yOffset = (gridVerticalOffset / previewHeight) * imageSize.height;
 
       // Clamp to image bounds
-      xOffsetBase = Math.max(0, Math.min(xOffsetBase, imageSize.width - totalCropWidth));
-      yOffset = Math.max(0, Math.min(yOffset, imageSize.height - totalCropHeight));
+      xOffsetBase = Math.max(
+        0,
+        Math.min(xOffsetBase, imageSize.width - totalCropWidth),
+      );
+      yOffset = Math.max(
+        0,
+        Math.min(yOffset, imageSize.height - totalCropHeight),
+      );
 
-      // Create Pixert album
+      // Get album name from settings
+      let albumName = "Pixert";
+      try {
+        const settingsFile = new File(Paths.document, "pixert_settings.json");
+        if (settingsFile.exists) {
+          const raw = await settingsFile.text();
+          const data = JSON.parse(raw);
+          if (data.albumName) albumName = data.albumName;
+        }
+      } catch (e) {
+        console.warn("Failed to read album name setting:", e);
+      }
+
+      // Create album
       let album;
       try {
-        album = await MediaLibrary.getAlbumAsync("Pixert");
+        album = await MediaLibrary.getAlbumAsync(albumName);
       } catch (e) {
         console.error("getAlbumAsync failed", e);
       }
@@ -320,7 +371,7 @@ export default function CarouselConfigScreen({
           console.error("createAssetAsync (firstAsset) failed", e);
           throw new Error(
             "createAssetAsync (firstAsset) failed: " +
-              ((e as any)?.message || String(e))
+              ((e as any)?.message || String(e)),
           );
         }
         try {
@@ -328,15 +379,15 @@ export default function CarouselConfigScreen({
           // Try the 3-arg version first, fallback to 2-arg
           try {
             album = await (MediaLibrary as any).createAlbumAsync(
-              "Pixert",
+              albumName,
               firstAsset,
-              false
+              false,
             );
           } catch (err) {
             console.warn("createAlbumAsync 3-arg failed, trying 2-arg", err);
             album = await (MediaLibrary as any).createAlbumAsync(
-              "Pixert",
-              firstAsset
+              albumName,
+              firstAsset,
             );
           }
         } catch (e) {
@@ -380,17 +431,17 @@ export default function CarouselConfigScreen({
               },
               // Keep original resolution - no resize for high quality
             ],
-            { compress: 0.95, format: ImageManipulator.SaveFormat.JPEG }
+            { compress: 0.95, format: ImageManipulator.SaveFormat.JPEG },
           );
 
           console.log(
             `Split ${i + 1} cropped successfully, result URI:`,
-            manipResult.uri
+            manipResult.uri,
           );
         } catch (e) {
           console.error("ImageManipulator failed", e);
           throw new Error(
-            "ImageManipulator failed: " + ((e as any)?.message || String(e))
+            "ImageManipulator failed: " + ((e as any)?.message || String(e)),
           );
         }
         processedImages.push(manipResult.uri);
@@ -414,7 +465,7 @@ export default function CarouselConfigScreen({
         } catch (e) {
           console.error("createAssetAsync failed", e);
           throw new Error(
-            "createAssetAsync failed: " + ((e as any)?.message || String(e))
+            "createAssetAsync failed: " + ((e as any)?.message || String(e)),
           );
         }
         savedAssets.push(asset);
@@ -430,20 +481,20 @@ export default function CarouselConfigScreen({
           await (MediaLibrary as any).addAssetsToAlbumAsync(
             savedAssets,
             album,
-            false
+            false,
           );
-          console.log("All assets added to Pixert album");
+          console.log(`All assets added to ${albumName} album`);
         } catch (err) {
           console.warn(
             "addAssetsToAlbumAsync batch failed, trying individual",
-            err
+            err,
           );
           // Fallback to individual additions if batch fails
           for (const asset of savedAssets) {
             try {
               await (MediaLibrary as any).addAssetsToAlbumAsync(
                 [asset],
-                (album as any).id || album
+                (album as any).id || album,
               );
             } catch (err2) {
               console.error("Individual addAssetsToAlbumAsync failed", err2);
@@ -455,13 +506,30 @@ export default function CarouselConfigScreen({
       setProgress(100);
       clearInterval(progressInterval);
 
+      // Save to edit history
+      try {
+        await saveEditHistory({
+          id: Date.now().toString(),
+          mode: "carousel",
+          imageUri: imageUri,
+          timestamp: Date.now(),
+          specs: {
+            splits,
+            aspectRatio,
+            gridWidthPercentage,
+          },
+        });
+      } catch (e) {
+        console.warn("Failed to save edit history:", e);
+      }
+
       // Show themed success message
       setIsGenerating(false);
       setResultModal({
         visible: true,
         type: "success",
         title: "Carousel Created!",
-        message: `${splits} images saved to your gallery in the Pixert album.`,
+        message: `${splits} images saved to your gallery in the ${albumName} album.`,
       });
     } catch (error) {
       console.error("Error generating carousel:", error);
@@ -530,11 +598,11 @@ export default function CarouselConfigScreen({
       // Center it initially
       const centerVerticalOffset = Math.max(
         0,
-        (previewHeight - gridHeight) / 2
+        (previewHeight - gridHeight) / 2,
       );
       const centerHorizontalOffset = Math.max(
         0,
-        (previewWidth - gridWidth) / 2
+        (previewWidth - gridWidth) / 2,
       );
       setGridVerticalOffset(centerVerticalOffset);
       setGridHorizontalOffset(centerHorizontalOffset);
@@ -546,13 +614,25 @@ export default function CarouselConfigScreen({
 
   // Clamp grid offset when grid dimensions change (e.g., slider increase while at edge)
   useEffect(() => {
-    if (previewWidth <= 0 || previewHeight <= 0 || gridWidth <= 0 || gridHeight <= 0) return;
+    if (
+      previewWidth <= 0 ||
+      previewHeight <= 0 ||
+      gridWidth <= 0 ||
+      gridHeight <= 0
+    )
+      return;
 
     const maxVerticalOffset = Math.max(0, previewHeight - gridHeight);
     const maxHorizontalOffset = Math.max(0, previewWidth - gridWidth);
 
-    const clampedV = Math.max(0, Math.min(gridVerticalOffset, maxVerticalOffset));
-    const clampedH = Math.max(0, Math.min(gridHorizontalOffset, maxHorizontalOffset));
+    const clampedV = Math.max(
+      0,
+      Math.min(gridVerticalOffset, maxVerticalOffset),
+    );
+    const clampedH = Math.max(
+      0,
+      Math.min(gridHorizontalOffset, maxHorizontalOffset),
+    );
 
     if (clampedV !== gridVerticalOffset || clampedH !== gridHorizontalOffset) {
       setGridVerticalOffset(clampedV);
@@ -576,17 +656,17 @@ export default function CarouselConfigScreen({
         // Use refs for current dimension values
         const maxVerticalOffset = Math.max(
           0,
-          previewHeightRef.current - gridHeightRef.current
+          previewHeightRef.current - gridHeightRef.current,
         );
         const maxHorizontalOffset = Math.max(
           0,
-          previewWidthRef.current - gridWidthRef.current
+          previewWidthRef.current - gridWidthRef.current,
         );
 
         let newVerticalOffset = panStartY.current + gestureState.dy;
         newVerticalOffset = Math.max(
           0,
-          Math.min(newVerticalOffset, maxVerticalOffset)
+          Math.min(newVerticalOffset, maxVerticalOffset),
         );
         // Update both state and ref directly
         setGridVerticalOffset(newVerticalOffset);
@@ -595,7 +675,7 @@ export default function CarouselConfigScreen({
         let newHorizontalOffset = panStartX.current + gestureState.dx;
         newHorizontalOffset = Math.max(
           0,
-          Math.min(newHorizontalOffset, maxHorizontalOffset)
+          Math.min(newHorizontalOffset, maxHorizontalOffset),
         );
         // Update both state and ref directly
         setGridHorizontalOffset(newHorizontalOffset);
@@ -605,17 +685,17 @@ export default function CarouselConfigScreen({
         // Use refs for current dimension values
         const maxVerticalOffset = Math.max(
           0,
-          previewHeightRef.current - gridHeightRef.current
+          previewHeightRef.current - gridHeightRef.current,
         );
         const maxHorizontalOffset = Math.max(
           0,
-          previewWidthRef.current - gridWidthRef.current
+          previewWidthRef.current - gridWidthRef.current,
         );
 
         let finalVerticalOffset = panStartY.current + gestureState.dy;
         finalVerticalOffset = Math.max(
           0,
-          Math.min(finalVerticalOffset, maxVerticalOffset)
+          Math.min(finalVerticalOffset, maxVerticalOffset),
         );
         // Update both state and ref directly
         setGridVerticalOffset(finalVerticalOffset);
@@ -624,13 +704,13 @@ export default function CarouselConfigScreen({
         let finalHorizontalOffset = panStartX.current + gestureState.dx;
         finalHorizontalOffset = Math.max(
           0,
-          Math.min(finalHorizontalOffset, maxHorizontalOffset)
+          Math.min(finalHorizontalOffset, maxHorizontalOffset),
         );
         // Update both state and ref directly
         setGridHorizontalOffset(finalHorizontalOffset);
         gridHorizontalOffsetRef.current = finalHorizontalOffset;
       },
-    })
+    }),
   ).current;
 
   // Get grid position
@@ -646,13 +726,23 @@ export default function CarouselConfigScreen({
   if (!fontsLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#376161" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.backgroundContainer} edges={["top"]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.backButtonText}>←</Text>
+        </TouchableOpacity>
+      </View>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -811,9 +901,9 @@ export default function CarouselConfigScreen({
                 onSlidingComplete={() =>
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 }
-                minimumTrackTintColor="#376161"
-                maximumTrackTintColor="#ddd"
-                thumbTintColor="#376161"
+                minimumTrackTintColor={colors.primary}
+                maximumTrackTintColor={colors.sliderTrack}
+                thumbTintColor={colors.primary}
               />
               <Text style={styles.sliderLabel}>Bigger</Text>
             </View>
@@ -907,7 +997,9 @@ export default function CarouselConfigScreen({
         visible={resultModal.visible}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setResultModal({ ...resultModal, visible: false })}
+        onRequestClose={() =>
+          setResultModal({ ...resultModal, visible: false })
+        }
       >
         <View style={styles.resultModalOverlay}>
           <View style={styles.resultModalContent}>
@@ -937,402 +1029,415 @@ export default function CarouselConfigScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  backgroundContainer: {
-    flex: 1,
-    backgroundColor: "#97C8C9",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "transparent",
-  },
-  content: {
-    padding: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontFamily: "Lato_700Bold",
-    color: "#333",
-    marginBottom: 24,
-    textAlign: "center",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  // Empty State
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-  },
-  emptyStateIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  emptyStateTitle: {
-    fontSize: 20,
-    fontFamily: "Lato_700Bold",
-    color: "#333",
-    marginBottom: 8,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontFamily: "Lato_700Bold",
-    color: "#444",
-    marginBottom: 12,
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  // Upload button (rectangular 18:9 with dashed border)
-  uploadButton: {
-    backgroundColor: "rgba(55,97,97,0.15)",
-    width: "100%",
-    aspectRatio: 2,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderStyle: "dashed",
-    borderColor: "#376161",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  uploadButtonText: {
-    fontSize: 16,
-    fontFamily: "Lato_700Bold",
-    color: "#203838",
-  },
-  uploadedImageContainer: {
-    width: "100%",
-    aspectRatio: 2,
-    borderRadius: 8,
-    overflow: "hidden",
-    backgroundColor: "#f5f5f5",
-    marginBottom: 12,
-  },
-  uploadedImage: {
-    width: "100%",
-    height: "100%",
-  },
-  changeImageButton: {
-    backgroundColor: "transparent",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  changeImageButtonText: {
-    fontSize: 14,
-    fontFamily: "Lato_700Bold",
-    color: "#376161",
-  },
-  // Preview (kept only as grid preview below)
-  previewImage: {
-    width: "100%",
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-  optionsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  // Selection buttons (semi-transparent, no inner border)
-  optionButton: {
-    flex: 1,
-    backgroundColor: "rgba(55,97,97,0.25)",
-    padding: 14,
-    borderRadius: 10,
-    alignItems: "center",
-    marginHorizontal: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  optionButtonActive: {
-    backgroundColor: "#376161",
-    shadowOpacity: 0.15,
-    elevation: 4,
-  },
-  optionButtonText: {
-    fontSize: 20,
-    fontFamily: "Lato_700Bold",
-    color: "#203838",
-  },
-  optionButtonTextActive: {
-    color: "#fff",
-  },
-  // Split Control (Arrow-based UI)
-  splitControlContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 20,
-  },
-  arrowButton: {
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  arrowButtonText: {
-    fontSize: 40,
-    color: "#376161",
-    fontWeight: "300",
-  },
-  arrowButtonDisabled: {
-    opacity: 0.3,
-  },
-  splitNumberBox: {
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: "#376161",
-    minWidth: 120,
-    paddingVertical: 20,
-    paddingHorizontal: 30,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  splitNumberText: {
-    fontSize: 48,
-    fontFamily: "Lato_700Bold",
-    color: "#376161",
-  },
-  customInput: {
-    marginTop: 12,
-    backgroundColor: "rgba(55,97,97,0.25)",
-    padding: 14,
-    borderRadius: 10,
-    fontSize: 16,
-    fontFamily: "Lato_700Bold",
-    color: "#203838",
-    textAlign: "center",
-  },
-  customInputInvalid: {
-    // keep a visual invalid hint via background tint
-    backgroundColor: "rgba(231,76,60,0.12)",
-  },
-  // Slider for grid width
-  sliderContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 8,
-  },
-  sliderLabel: {
-    fontSize: 12,
-    fontFamily: "Lato_700Bold",
-    color: "#666",
-    textTransform: "uppercase",
-  },
-  slider: {
-    flex: 1,
-    height: 40,
-  },
-  sliderValue: {
-    fontSize: 16,
-    fontFamily: "Lato_700Bold",
-    color: "#376161",
-    textAlign: "center",
-    marginTop: 8,
-  },
-  gridPreview: {
-    position: "relative",
-    width: "100%",
-    aspectRatio: 1,
-    borderRadius: 0,
-    overflow: "hidden",
-    marginBottom: 10,
-    backgroundColor: "#000",
-  },
-  gridBackgroundImage: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
-  gridContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  gridOverlay: {
-    flexDirection: "row",
-    width: "100%",
-    height: "100%",
-    backgroundColor: "rgba(0,0,0,0.25)",
-  },
-  gridCell: {
-    justifyContent: "center",
-    alignItems: "center",
-    borderRightWidth: 2,
-    borderRightColor: "rgba(255, 255, 255, 0.9)",
-  },
-  gridBorder: {
-    width: "100%",
-    height: "100%",
-    borderTopWidth: 2,
-    borderBottomWidth: 2,
-    borderTopColor: "rgba(255, 255, 255, 0.9)",
-    borderBottomColor: "rgba(255, 255, 255, 0.9)",
-    backgroundColor: "rgba(255,255,255,0.03)",
-  },
-  aspectRatioButton: {
-    padding: 0,
-    margin: 5,
-  },
-  aspectRatioBox: {
-    backgroundColor: "#000",
-    padding: 20,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 80,
-    minHeight: 60,
-  },
-  aspectRatioBoxActive: {
-    backgroundColor: "#376161",
-  },
-  aspectRatioText: {
-    color: "#fff",
-    fontSize: 16,
-    fontFamily: "Lato_700Bold",
-  },
-  aspectRatioTextActive: {
-    fontSize: 18,
-  },
-  generateSection: {
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  loadingContainer: {
-    alignItems: "center",
-    padding: 30,
-    backgroundColor: "#f9f9f9",
-    borderRadius: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  loadingText: {
-    fontSize: 16,
-    fontFamily: "Lato_700Bold",
-    color: "#333",
-    marginTop: 15,
-    marginBottom: 20,
-  },
-  progressBarContainer: {
-    width: "100%",
-    height: 10,
-    backgroundColor: "#e0e0e0",
-    borderRadius: 5,
-    overflow: "hidden",
-    marginBottom: 10,
-  },
-  progressBar: {
-    height: "100%",
-    backgroundColor: "#376161",
-    borderRadius: 5,
-  },
-  progressText: {
-    fontSize: 14,
-    fontFamily: "Lato_700Bold",
-    color: "#376161",
-  },
-  generateButton: {
-    backgroundColor: "#376161",
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 30,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  generateButtonText: {
-    color: "#fff",
-    fontSize: 17,
-    fontFamily: "Lato_700Bold",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  // Result Modal
-  resultModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 30,
-  },
-  resultModalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 30,
-    alignItems: "center",
-    width: "100%",
-    maxWidth: 320,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  resultModalIcon: {
-    fontSize: 48,
-    color: "#376161",
-    marginBottom: 12,
-    fontWeight: "700",
-  },
-  resultModalTitle: {
-    fontSize: 22,
-    fontFamily: "Lato_700Bold",
-    color: "#376161",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  resultModalMessage: {
-    fontSize: 15,
-    color: "#555",
-    lineHeight: 22,
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  resultModalButton: {
-    backgroundColor: "#376161",
-    paddingVertical: 14,
-    paddingHorizontal: 48,
-    borderRadius: 30,
-    alignItems: "center",
-  },
-  resultModalButtonError: {
-    backgroundColor: "#c0392b",
-  },
-  resultModalButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontFamily: "Lato_700Bold",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-});
+const createStyles = (c: ThemeColors) =>
+  StyleSheet.create({
+    backgroundContainer: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    header: {
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+    },
+    backButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: c.iconButtonBg,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    backButtonText: {
+      fontSize: 24,
+      color: c.primary,
+      fontWeight: "600",
+    },
+    container: {
+      flex: 1,
+      backgroundColor: "transparent",
+    },
+    content: {
+      padding: 20,
+    },
+    title: {
+      fontSize: 28,
+      fontFamily: "Lato_700Bold",
+      color: c.textPrimary,
+      marginBottom: 24,
+      textAlign: "center",
+      letterSpacing: 1,
+      textTransform: "uppercase",
+    },
+    // Empty State
+    emptyState: {
+      alignItems: "center",
+      paddingVertical: 40,
+      paddingHorizontal: 20,
+    },
+    emptyStateIcon: {
+      fontSize: 64,
+      marginBottom: 16,
+    },
+    emptyStateTitle: {
+      fontSize: 20,
+      fontFamily: "Lato_700Bold",
+      color: c.textPrimary,
+      marginBottom: 8,
+    },
+    emptyStateText: {
+      fontSize: 14,
+      color: c.textMuted,
+      textAlign: "center",
+      lineHeight: 20,
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionTitle: {
+      fontSize: 14,
+      fontFamily: "Lato_700Bold",
+      color: c.textSecondary,
+      marginBottom: 12,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+    },
+    // Upload button
+    uploadButton: {
+      backgroundColor: c.iconButtonBg,
+      width: "100%",
+      aspectRatio: 2,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 2,
+      borderStyle: "dashed",
+      borderColor: c.primary,
+      shadowColor: c.shadowColor,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    uploadButtonText: {
+      fontSize: 16,
+      fontFamily: "Lato_700Bold",
+      color: c.primaryDark,
+    },
+    uploadedImageContainer: {
+      width: "100%",
+      aspectRatio: 2,
+      borderRadius: 8,
+      overflow: "hidden",
+      backgroundColor: c.inputBg,
+      marginBottom: 12,
+    },
+    uploadedImage: {
+      width: "100%",
+      height: "100%",
+    },
+    changeImageButton: {
+      backgroundColor: "transparent",
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    changeImageButtonText: {
+      fontSize: 14,
+      fontFamily: "Lato_700Bold",
+      color: c.primary,
+    },
+    previewImage: {
+      width: "100%",
+      borderRadius: 12,
+      marginBottom: 10,
+    },
+    optionsRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    optionButton: {
+      flex: 1,
+      backgroundColor: c.iconButtonBgStrong,
+      padding: 14,
+      borderRadius: 10,
+      alignItems: "center",
+      marginHorizontal: 4,
+      shadowColor: c.shadowColor,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 3,
+      elevation: 2,
+    },
+    optionButtonActive: {
+      backgroundColor: c.primary,
+      shadowOpacity: 0.15,
+      elevation: 4,
+    },
+    optionButtonText: {
+      fontSize: 20,
+      fontFamily: "Lato_700Bold",
+      color: c.primaryDark,
+    },
+    optionButtonTextActive: {
+      color: c.buttonText,
+    },
+    splitControlContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 20,
+    },
+    arrowButton: {
+      paddingHorizontal: 15,
+      paddingVertical: 10,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    arrowButtonText: {
+      fontSize: 40,
+      color: c.primary,
+      fontWeight: "300",
+    },
+    arrowButtonDisabled: {
+      opacity: 0.3,
+    },
+    splitNumberBox: {
+      backgroundColor: c.accent,
+      borderWidth: 1,
+      borderColor: c.primary,
+      minWidth: 120,
+      paddingVertical: 20,
+      paddingHorizontal: 30,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    splitNumberText: {
+      fontSize: 48,
+      fontFamily: "Lato_700Bold",
+      color: c.primary,
+    },
+    customInput: {
+      marginTop: 12,
+      backgroundColor: c.iconButtonBgStrong,
+      padding: 14,
+      borderRadius: 10,
+      fontSize: 16,
+      fontFamily: "Lato_700Bold",
+      color: c.primaryDark,
+      textAlign: "center",
+    },
+    customInputInvalid: {
+      backgroundColor: c.dangerBg,
+    },
+    sliderContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingHorizontal: 8,
+    },
+    sliderLabel: {
+      fontSize: 12,
+      fontFamily: "Lato_700Bold",
+      color: c.textMuted,
+      textTransform: "uppercase",
+    },
+    slider: {
+      flex: 1,
+      height: 40,
+    },
+    sliderValue: {
+      fontSize: 16,
+      fontFamily: "Lato_700Bold",
+      color: c.primary,
+      textAlign: "center",
+      marginTop: 8,
+    },
+    gridPreview: {
+      position: "relative",
+      width: "100%",
+      aspectRatio: 1,
+      borderRadius: 0,
+      overflow: "hidden",
+      marginBottom: 10,
+      backgroundColor: "#000",
+    },
+    gridBackgroundImage: {
+      width: "100%",
+      height: "100%",
+      resizeMode: "cover",
+    },
+    gridContainer: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    gridOverlay: {
+      flexDirection: "row",
+      width: "100%",
+      height: "100%",
+      backgroundColor: "rgba(0,0,0,0.25)",
+    },
+    gridCell: {
+      justifyContent: "center",
+      alignItems: "center",
+      borderRightWidth: 2,
+      borderRightColor: "rgba(255, 255, 255, 0.9)",
+    },
+    gridBorder: {
+      width: "100%",
+      height: "100%",
+      borderTopWidth: 2,
+      borderBottomWidth: 2,
+      borderTopColor: "rgba(255, 255, 255, 0.9)",
+      borderBottomColor: "rgba(255, 255, 255, 0.9)",
+      backgroundColor: "rgba(255,255,255,0.03)",
+    },
+    aspectRatioButton: {
+      padding: 0,
+      margin: 5,
+    },
+    aspectRatioBox: {
+      backgroundColor: "#000",
+      padding: 20,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: 80,
+      minHeight: 60,
+    },
+    aspectRatioBoxActive: {
+      backgroundColor: c.primary,
+    },
+    aspectRatioText: {
+      color: c.buttonText,
+      fontSize: 16,
+      fontFamily: "Lato_700Bold",
+    },
+    aspectRatioTextActive: {
+      fontSize: 18,
+    },
+    generateSection: {
+      marginTop: 10,
+      marginBottom: 20,
+    },
+    loadingContainer: {
+      alignItems: "center",
+      padding: 30,
+      backgroundColor: c.cardAlt,
+      borderRadius: 10,
+      shadowColor: c.shadowColor,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    loadingText: {
+      fontSize: 16,
+      fontFamily: "Lato_700Bold",
+      color: c.textPrimary,
+      marginTop: 15,
+      marginBottom: 20,
+    },
+    progressBarContainer: {
+      width: "100%",
+      height: 10,
+      backgroundColor: c.progressBg,
+      borderRadius: 5,
+      overflow: "hidden",
+      marginBottom: 10,
+    },
+    progressBar: {
+      height: "100%",
+      backgroundColor: c.primary,
+      borderRadius: 5,
+    },
+    progressText: {
+      fontSize: 14,
+      fontFamily: "Lato_700Bold",
+      color: c.primary,
+    },
+    generateButton: {
+      backgroundColor: c.primary,
+      paddingVertical: 16,
+      paddingHorizontal: 32,
+      borderRadius: 30,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: c.shadowColor,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.2,
+      shadowRadius: 5,
+      elevation: 5,
+    },
+    generateButtonText: {
+      color: c.buttonText,
+      fontSize: 17,
+      fontFamily: "Lato_700Bold",
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+    },
+    // Result Modal
+    resultModalOverlay: {
+      flex: 1,
+      backgroundColor: c.overlayBg,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 30,
+    },
+    resultModalContent: {
+      backgroundColor: c.modalBg,
+      borderRadius: 20,
+      padding: 30,
+      alignItems: "center",
+      width: "100%",
+      maxWidth: 320,
+      shadowColor: c.shadowColor,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 10,
+      elevation: 10,
+    },
+    resultModalIcon: {
+      fontSize: 48,
+      color: c.primary,
+      marginBottom: 12,
+      fontWeight: "700",
+    },
+    resultModalTitle: {
+      fontSize: 22,
+      fontFamily: "Lato_700Bold",
+      color: c.primary,
+      marginBottom: 8,
+      textAlign: "center",
+    },
+    resultModalMessage: {
+      fontSize: 15,
+      color: c.textTertiary,
+      lineHeight: 22,
+      textAlign: "center",
+      marginBottom: 24,
+    },
+    resultModalButton: {
+      backgroundColor: c.primary,
+      paddingVertical: 14,
+      paddingHorizontal: 48,
+      borderRadius: 30,
+      alignItems: "center",
+    },
+    resultModalButtonError: {
+      backgroundColor: c.danger,
+    },
+    resultModalButtonText: {
+      color: c.buttonText,
+      fontSize: 16,
+      fontFamily: "Lato_700Bold",
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+    },
+  });

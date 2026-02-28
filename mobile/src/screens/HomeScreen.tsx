@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import {
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
 import { useFonts, Lato_700Bold } from "@expo-google-fonts/lato";
+import { Feather } from "@expo/vector-icons";
+import { useTheme, ThemeColors } from "../context/ThemeContext";
 // import { Button } from "@shared/components/Button"; // Temporarily disabled due to React version conflict
 
 type HomeScreenProps = {
@@ -28,6 +30,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
   const [tutorialVisible, setTutorialVisible] = useState(false);
   const [tutorialType, setTutorialType] = useState<TutorialType>(null);
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   let [fontsLoaded] = useFonts({
     Lato_700Bold,
@@ -35,10 +39,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
   const openWebsite = () => {
     Linking.openURL("https://solase.studio");
-  };
-
-  const openEmail = () => {
-    Linking.openURL("mailto:contact@solase.studio");
   };
 
   const openYouTubeVideo = () => {
@@ -114,6 +114,24 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
   return (
     <View style={styles.container}>
+      {/* Top Bar Icons */}
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          style={styles.topIconButton}
+          onPress={() => navigation.navigate("RecentEdits")}
+          activeOpacity={0.7}
+        >
+          <Feather name="clock" size={22} color={colors.primary} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.topIconButton}
+          onPress={() => navigation.navigate("Settings")}
+          activeOpacity={0.7}
+        >
+          <Feather name="settings" size={22} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.centerContent}>
         <Animated.View
           style={[
@@ -185,14 +203,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           resizeMode="contain"
         />
         <Text style={styles.studioText}>SOLASE Studio</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.contactButton}
-        onPress={openEmail}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.contactButtonText}>Contact Us</Text>
       </TouchableOpacity>
 
       {/* Tutorial Modal */}
@@ -277,253 +287,247 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#97C8C9",
-    justifyContent: "space-between",
-    padding: 20,
-  },
-  centerContent: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  content: {
-    alignItems: "center",
-    width: "100%",
-    maxWidth: 400,
-  },
-  buttonWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
-    marginBottom: 20,
-    gap: 8,
-  },
-  welcomeText: {
-    fontSize: 32,
-    fontFamily: "Lato_700Bold",
-    marginBottom: 40,
-    color: "#203838",
-    textAlign: "center",
-    letterSpacing: 0.5,
-  },
-  optionButton: {
-    backgroundColor: "#376161",
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    borderRadius: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
-    gap: 12,
-    width: "100%",
-    marginBottom: 20,
-  },
-  helpIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  helpIconText: {
-    fontSize: 24,
-    fontFamily: "Lato_700Bold",
-    color: "#376161",
-  },
-  optionButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontFamily: "Lato_700Bold",
-    letterSpacing: 0.5,
-    flex: 1,
-    flexShrink: 1,
-  },
-  buttonIcon: {
-    width: 32,
-    height: 32,
-    flexShrink: 0,
-  },
-  divider: {
-    width: 2,
-    height: 32,
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
-    flexShrink: 0,
-  },
-  logoContainer: {
-    alignItems: "center",
-    paddingBottom: 20,
-  },
-  logo: {
-    width: 120,
-    height: 120,
-    marginBottom: 12,
-  },
-  studioText: {
-    fontSize: 14,
-    color: "#376161",
-    fontFamily: "Lato_700Bold",
-    letterSpacing: 1,
-  },
-  contactButton: {
-    backgroundColor: "#fff",
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
-    marginBottom: 20,
-    marginHorizontal: 20,
-  },
-  contactButtonText: {
-    color: "#376161",
-    fontSize: 16,
-    fontFamily: "Lato_700Bold",
-    letterSpacing: 0.5,
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    width: "100%",
-    maxHeight: "85%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontFamily: "Lato_700Bold",
-    color: "#376161",
-    flex: 1,
-  },
-  closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#f0f0f0",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeButtonText: {
-    fontSize: 24,
-    color: "#666",
-    fontWeight: "300",
-  },
-  modalScrollView: {
-    maxHeight: "100%",
-  },
-  modalScrollContent: {
-    padding: 20,
-  },
-  tutorialGif: {
-    width: "100%",
-    height: 250,
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  tutorialDescription: {
-    fontSize: 15,
-    color: "#555",
-    lineHeight: 22,
-    marginBottom: 24,
-    textAlign: "center",
-  },
-  stepContainer: {
-    flexDirection: "row",
-    marginBottom: 20,
-    alignItems: "flex-start",
-  },
-  stepNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#376161",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  stepNumberText: {
-    fontSize: 16,
-    fontFamily: "Lato_700Bold",
-    color: "#fff",
-  },
-  stepText: {
-    flex: 1,
-    fontSize: 15,
-    color: "#333",
-    lineHeight: 22,
-    paddingTop: 5,
-  },
-  watchTutorialButton: {
-    backgroundColor: "#376161",
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  watchTutorialButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontFamily: "Lato_700Bold",
-    letterSpacing: 0.5,
-  },
-  placeholderBox: {
-    marginTop: 20,
-    padding: 40,
-    backgroundColor: "#f5f5f5",
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "#e0e0e0",
-    borderStyle: "dashed",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeholderText: {
-    fontSize: 14,
-    color: "#999",
-    textAlign: "center",
-  },
-});
+const createStyles = (c: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+      justifyContent: "space-between",
+      padding: 20,
+    },
+    topBar: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingTop: 30,
+    },
+    topIconButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: c.iconButtonBg,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    centerContent: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    content: {
+      alignItems: "center",
+      width: "100%",
+      maxWidth: 400,
+    },
+    buttonWrapper: {
+      flexDirection: "row",
+      alignItems: "center",
+      width: "100%",
+      marginBottom: 20,
+      gap: 8,
+    },
+    welcomeText: {
+      fontSize: 32,
+      fontFamily: "Lato_700Bold",
+      marginBottom: 40,
+      color: c.primaryDark,
+      textAlign: "center",
+      letterSpacing: 0.5,
+    },
+    optionButton: {
+      backgroundColor: c.primary,
+      paddingVertical: 20,
+      paddingHorizontal: 20,
+      borderRadius: 15,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      shadowColor: c.shadowColor,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.2,
+      shadowRadius: 5,
+      elevation: 5,
+      gap: 12,
+      width: "100%",
+      marginBottom: 20,
+    },
+    helpIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: c.card,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: c.shadowColor,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 3,
+      elevation: 3,
+    },
+    helpIconText: {
+      fontSize: 24,
+      fontFamily: "Lato_700Bold",
+      color: c.primary,
+    },
+    optionButtonText: {
+      color: c.buttonText,
+      fontSize: 16,
+      fontFamily: "Lato_700Bold",
+      letterSpacing: 0.5,
+      flex: 1,
+      flexShrink: 1,
+    },
+    buttonIcon: {
+      width: 32,
+      height: 32,
+      flexShrink: 0,
+    },
+    divider: {
+      width: 2,
+      height: 32,
+      backgroundColor: c.chipBg,
+      flexShrink: 0,
+    },
+    logoContainer: {
+      alignItems: "center",
+      paddingBottom: 20,
+    },
+    logo: {
+      width: 120,
+      height: 120,
+      marginBottom: 12,
+    },
+    studioText: {
+      fontSize: 14,
+      color: c.primary,
+      fontFamily: "Lato_700Bold",
+      letterSpacing: 1,
+    },
+    // Modal styles
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: c.overlayBg,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 20,
+    },
+    modalContent: {
+      backgroundColor: c.modalBg,
+      borderRadius: 20,
+      width: "100%",
+      maxHeight: "85%",
+      shadowColor: c.shadowColor,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 10,
+      elevation: 10,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: c.separator,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontFamily: "Lato_700Bold",
+      color: c.primary,
+      flex: 1,
+    },
+    closeButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: c.borderLight,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    closeButtonText: {
+      fontSize: 24,
+      color: c.textMuted,
+      fontWeight: "300",
+    },
+    modalScrollView: {
+      maxHeight: "100%",
+    },
+    modalScrollContent: {
+      padding: 20,
+    },
+    tutorialGif: {
+      width: "100%",
+      height: 250,
+      borderRadius: 12,
+      marginBottom: 20,
+    },
+    tutorialDescription: {
+      fontSize: 15,
+      color: c.textTertiary,
+      lineHeight: 22,
+      marginBottom: 24,
+      textAlign: "center",
+    },
+    stepContainer: {
+      flexDirection: "row",
+      marginBottom: 20,
+      alignItems: "flex-start",
+    },
+    stepNumber: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: c.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 12,
+    },
+    stepNumberText: {
+      fontSize: 16,
+      fontFamily: "Lato_700Bold",
+      color: c.buttonText,
+    },
+    stepText: {
+      flex: 1,
+      fontSize: 15,
+      color: c.textPrimary,
+      lineHeight: 22,
+      paddingTop: 5,
+    },
+    watchTutorialButton: {
+      backgroundColor: c.primary,
+      paddingVertical: 16,
+      paddingHorizontal: 32,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 24,
+      shadowColor: c.shadowColor,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    watchTutorialButtonText: {
+      color: c.buttonText,
+      fontSize: 16,
+      fontFamily: "Lato_700Bold",
+      letterSpacing: 0.5,
+    },
+    placeholderBox: {
+      marginTop: 20,
+      padding: 40,
+      backgroundColor: c.inputBg,
+      borderRadius: 12,
+      borderWidth: 2,
+      borderColor: c.border,
+      borderStyle: "dashed",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    placeholderText: {
+      fontSize: 14,
+      color: c.textPlaceholder,
+      textAlign: "center",
+    },
+  });

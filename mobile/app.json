@@ -2,7 +2,7 @@
   "expo": {
     "name": "Pixert",
     "slug": "pixert-mobile",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "description": "Create stunning panoramic Instagram carousels in seconds. Split your wide images into perfect carousel posts.",
@@ -24,6 +24,8 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#97C8C9"
       },
+      "edgeToEdge": true,
+      "versionCode": 10,
       "package": "com.pixert.app",
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -42,7 +44,16 @@
           "isAccessMediaLocationEnabled": true
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-system-ui",
+      [
+        "expo-navigation-bar",
+        {
+          "position": "absolute",
+          "visibility": "visible",
+          "backgroundColor": "#00000000"
+        }
+      ]
     ],
     "extra": {
       "eas": {

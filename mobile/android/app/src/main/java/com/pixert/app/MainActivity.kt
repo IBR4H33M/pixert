@@ -3,6 +3,8 @@ package com.pixert.app
 import android.os.Build
 import android.os.Bundle
 
+import androidx.activity.enableEdgeToEdge
+
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
@@ -15,7 +17,10 @@ class MainActivity : ReactActivity() {
     // Set the theme to AppTheme BEFORE onCreate to support
     // coloring the background, status bar, and navigation bar.
     // This is required for expo-splash-screen.
-    setTheme(R.style.AppTheme);
+    setTheme(R.style.AppTheme)
+    // Use the modern edge-to-edge API (replaces deprecated
+    // setStatusBarColor / setNavigationBarColor on Android 15+)
+    enableEdgeToEdge()
     super.onCreate(null)
   }
 

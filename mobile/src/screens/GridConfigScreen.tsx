@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -14,13 +14,16 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../../App";
+import { RootStackParamList, EditHistoryEntry } from "../../App";
+import { RouteProp, useRoute } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as MediaLibrary from "expo-media-library";
+import { Paths, File } from "expo-file-system";
 import { useFonts, Lato_700Bold } from "@expo-google-fonts/lato";
 import * as Haptics from "expo-haptics";
 import Slider from "@react-native-community/slider";
+import { useTheme, ThemeColors } from "../context/ThemeContext";
 
 type GridConfigScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, "GridConfig">;
@@ -29,16 +32,44 @@ type GridConfigScreenProps = {
 type GridDimension = "2x2" | "3x2" | "3x3";
 type AspectRatio = "3:4" | "1:1";
 
+const HISTORY_FILE = new File(Paths.document, "pixert_edit_history.json");
+const MAX_HISTORY = 3;
+
+const saveEditHistory = async (entry: EditHistoryEntry) => {
+  let history: EditHistoryEntry[] = [];
+  try {
+    if (HISTORY_FILE.exists) {
+      const raw = await HISTORY_FILE.text();
+      history = JSON.parse(raw);
+    }
+  } catch {}
+  history.unshift(entry);
+  if (history.length > MAX_HISTORY) history = history.slice(0, MAX_HISTORY);
+  HISTORY_FILE.write(JSON.stringify(history));
+};
+
 export default function GridConfigScreen({
   navigation,
 }: GridConfigScreenProps) {
+  const route = useRoute<RouteProp<RootStackParamList, "GridConfig">>();
+  const prefill = route.params?.prefill;
+
   const [fontsLoaded] = useFonts({
     Lato_700Bold,
   });
 
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [selectedGrid, setSelectedGrid] = useState<GridDimension>("2x2");
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>("1:1");
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const [imageUri, setImageUri] = useState<string | null>(
+    prefill?.imageUri || null,
+  );
+  const [selectedGrid, setSelectedGrid] = useState<GridDimension>(
+    (prefill?.specs?.grid as GridDimension) || "2x2",
+  );
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>(
+    (prefill?.specs?.aspectRatio as AspectRatio) || "1:1",
+  );
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -53,7 +84,9 @@ export default function GridConfigScreen({
   }>({ visible: false, type: "success", title: "", message: "" });
 
   // Grid preview and dragging states
-  const [gridWidthPercentage, setGridWidthPercentage] = useState<number>(100);
+  const [gridWidthPercentage, setGridWidthPercentage] = useState<number>(
+    prefill?.specs?.gridWidthPercentage ?? 100,
+  );
   const [previewWidth, setPreviewWidth] = useState<number>(300);
   const [previewHeight, setPreviewHeight] = useState(300);
   const [gridHorizontalOffset, setGridHorizontalOffset] = useState<number>(0);
@@ -80,7 +113,7 @@ export default function GridConfigScreen({
     if (status !== "granted") {
       Alert.alert(
         "Permission Required",
-        "Sorry, we need camera roll permissions to upload images!"
+        "Sorry, we need camera roll permissions to upload images!",
       );
       setIsLoadingImage(false);
       return;
@@ -120,7 +153,7 @@ export default function GridConfigScreen({
 
   // Get actual image size
   const getActualImageSize = async (
-    uri: string
+    uri: string,
   ): Promise<{ width: number; height: number }> => {
     try {
       if (uri.startsWith("file://") || uri.startsWith("content://")) {
@@ -149,9 +182,9 @@ export default function GridConfigScreen({
             Image.getSize(
               uri,
               (width, height) => resolve({ width, height }),
-              reject
+              reject,
             );
-          }
+          },
         );
       });
     } catch (error) {
@@ -159,7 +192,7 @@ export default function GridConfigScreen({
         Image.getSize(
           uri,
           (width, height) => resolve({ width, height }),
-          reject
+          reject,
         );
       });
     }
@@ -179,7 +212,7 @@ export default function GridConfigScreen({
       if (status !== "granted") {
         Alert.alert(
           "Permission Required",
-          "We need permission to save images to your gallery."
+          "We need permission to save images to your gallery.",
         );
         setIsGenerating(false);
         return;
@@ -210,7 +243,7 @@ export default function GridConfigScreen({
       if (aspectRatio === "1:1") {
         const maxCellSize = Math.min(
           imageSize.width / cols,
-          imageSize.height / rows
+          imageSize.height / rows,
         );
         cellWidth = cellHeight = maxCellSize * sizeMultiplier;
       } else {
@@ -226,7 +259,7 @@ export default function GridConfigScreen({
       const totalGridHeight = cellHeight * rows;
       yOffset = Math.max(
         0,
-        Math.min(yOffset, imageSize.height - totalGridHeight)
+        Math.min(yOffset, imageSize.height - totalGridHeight),
       );
 
       const horizontalOffsetRatio = gridHorizontalOffset / previewWidth;
@@ -234,13 +267,26 @@ export default function GridConfigScreen({
       let xOffset = horizontalOffsetRatio * imageSize.width;
       xOffset = Math.max(
         0,
-        Math.min(xOffset, imageSize.width - totalGridWidth)
+        Math.min(xOffset, imageSize.width - totalGridWidth),
       );
 
-      // Create Pixert album
+      // Get album name from settings
+      let albumName = "Pixert";
+      try {
+        const settingsFile = new File(Paths.document, "pixert_settings.json");
+        if (settingsFile.exists) {
+          const raw = await settingsFile.text();
+          const data = JSON.parse(raw);
+          if (data.albumName) albumName = data.albumName;
+        }
+      } catch (e) {
+        console.warn("Failed to read album name setting:", e);
+      }
+
+      // Create album
       let album;
       try {
-        album = await MediaLibrary.getAlbumAsync("Pixert");
+        album = await MediaLibrary.getAlbumAsync(albumName);
       } catch (e) {
         console.error("getAlbumAsync failed", e);
       }
@@ -256,14 +302,14 @@ export default function GridConfigScreen({
         try {
           try {
             album = await (MediaLibrary as any).createAlbumAsync(
-              "Pixert",
+              albumName,
               firstAsset,
-              false
+              false,
             );
           } catch (err) {
             album = await (MediaLibrary as any).createAlbumAsync(
-              "Pixert",
-              firstAsset
+              albumName,
+              firstAsset,
             );
           }
         } catch (e) {
@@ -302,7 +348,7 @@ export default function GridConfigScreen({
                 },
               },
             ],
-            { compress: 0.95, format: ImageManipulator.SaveFormat.JPEG }
+            { compress: 0.95, format: ImageManipulator.SaveFormat.JPEG },
           );
 
           processedImages.push(croppedImage.uri);
@@ -327,7 +373,7 @@ export default function GridConfigScreen({
           await (MediaLibrary as any).addAssetsToAlbumAsync(
             savedAssets,
             album,
-            false
+            false,
           );
         } catch (err) {
           console.warn("addAssetsToAlbumAsync batch failed", err);
@@ -335,7 +381,7 @@ export default function GridConfigScreen({
             try {
               await (MediaLibrary as any).addAssetsToAlbumAsync(
                 [asset],
-                (album as any).id || album
+                (album as any).id || album,
               );
             } catch (err2) {
               console.error("Individual addAssetsToAlbumAsync failed", err2);
@@ -347,12 +393,29 @@ export default function GridConfigScreen({
       clearInterval(progressInterval);
       setProgress(100);
 
+      // Save to edit history
+      try {
+        await saveEditHistory({
+          id: Date.now().toString(),
+          mode: "grid",
+          imageUri: imageUri,
+          timestamp: Date.now(),
+          specs: {
+            grid: selectedGrid,
+            aspectRatio,
+            gridWidthPercentage,
+          },
+        });
+      } catch (e) {
+        console.warn("Failed to save edit history:", e);
+      }
+
       setIsGenerating(false);
       setResultModal({
         visible: true,
         type: "success",
         title: "Grid Created!",
-        message: `${totalCells} images saved to your gallery in the Pixert album.`,
+        message: `${totalCells} images saved to your gallery in the ${albumName} album.`,
       });
     } catch (error) {
       console.error("Error generating grid:", error);
@@ -418,7 +481,13 @@ export default function GridConfigScreen({
     setGridHeight(newGridHeight);
     gridWidthRef.current = newGridWidth;
     gridHeightRef.current = newGridHeight;
-  }, [aspectRatio, selectedGrid, gridWidthPercentage, previewWidth, previewHeight]);
+  }, [
+    aspectRatio,
+    selectedGrid,
+    gridWidthPercentage,
+    previewWidth,
+    previewHeight,
+  ]);
 
   // Update preview dimension refs
   useEffect(() => {
@@ -436,11 +505,11 @@ export default function GridConfigScreen({
     ) {
       const centerVerticalOffset = Math.max(
         0,
-        (previewHeight - gridHeight) / 2
+        (previewHeight - gridHeight) / 2,
       );
       const centerHorizontalOffset = Math.max(
         0,
-        (previewWidth - gridWidth) / 2
+        (previewWidth - gridWidth) / 2,
       );
       setGridVerticalOffset(centerVerticalOffset);
       setGridHorizontalOffset(centerHorizontalOffset);
@@ -451,13 +520,25 @@ export default function GridConfigScreen({
 
   // Clamp grid offset when grid dimensions change (e.g., slider increase while at edge)
   useEffect(() => {
-    if (previewWidth <= 0 || previewHeight <= 0 || gridWidth <= 0 || gridHeight <= 0) return;
+    if (
+      previewWidth <= 0 ||
+      previewHeight <= 0 ||
+      gridWidth <= 0 ||
+      gridHeight <= 0
+    )
+      return;
 
     const maxVerticalOffset = Math.max(0, previewHeight - gridHeight);
     const maxHorizontalOffset = Math.max(0, previewWidth - gridWidth);
 
-    const clampedV = Math.max(0, Math.min(gridVerticalOffset, maxVerticalOffset));
-    const clampedH = Math.max(0, Math.min(gridHorizontalOffset, maxHorizontalOffset));
+    const clampedV = Math.max(
+      0,
+      Math.min(gridVerticalOffset, maxVerticalOffset),
+    );
+    const clampedH = Math.max(
+      0,
+      Math.min(gridHorizontalOffset, maxHorizontalOffset),
+    );
 
     if (clampedV !== gridVerticalOffset || clampedH !== gridHorizontalOffset) {
       setGridVerticalOffset(clampedV);
@@ -479,17 +560,17 @@ export default function GridConfigScreen({
       onPanResponderMove: (evt, gestureState) => {
         const maxVerticalOffset = Math.max(
           0,
-          previewHeightRef.current - gridHeightRef.current
+          previewHeightRef.current - gridHeightRef.current,
         );
         const maxHorizontalOffset = Math.max(
           0,
-          previewWidthRef.current - gridWidthRef.current
+          previewWidthRef.current - gridWidthRef.current,
         );
 
         let newVerticalOffset = panStartY.current + gestureState.dy;
         newVerticalOffset = Math.max(
           0,
-          Math.min(newVerticalOffset, maxVerticalOffset)
+          Math.min(newVerticalOffset, maxVerticalOffset),
         );
         setGridVerticalOffset(newVerticalOffset);
         gridVerticalOffsetRef.current = newVerticalOffset;
@@ -497,7 +578,7 @@ export default function GridConfigScreen({
         let newHorizontalOffset = panStartX.current + gestureState.dx;
         newHorizontalOffset = Math.max(
           0,
-          Math.min(newHorizontalOffset, maxHorizontalOffset)
+          Math.min(newHorizontalOffset, maxHorizontalOffset),
         );
         setGridHorizontalOffset(newHorizontalOffset);
         gridHorizontalOffsetRef.current = newHorizontalOffset;
@@ -505,17 +586,17 @@ export default function GridConfigScreen({
       onPanResponderRelease: (evt, gestureState) => {
         const maxVerticalOffset = Math.max(
           0,
-          previewHeightRef.current - gridHeightRef.current
+          previewHeightRef.current - gridHeightRef.current,
         );
         const maxHorizontalOffset = Math.max(
           0,
-          previewWidthRef.current - gridWidthRef.current
+          previewWidthRef.current - gridWidthRef.current,
         );
 
         let finalVerticalOffset = panStartY.current + gestureState.dy;
         finalVerticalOffset = Math.max(
           0,
-          Math.min(finalVerticalOffset, maxVerticalOffset)
+          Math.min(finalVerticalOffset, maxVerticalOffset),
         );
         setGridVerticalOffset(finalVerticalOffset);
         gridVerticalOffsetRef.current = finalVerticalOffset;
@@ -523,12 +604,12 @@ export default function GridConfigScreen({
         let finalHorizontalOffset = panStartX.current + gestureState.dx;
         finalHorizontalOffset = Math.max(
           0,
-          Math.min(finalHorizontalOffset, maxHorizontalOffset)
+          Math.min(finalHorizontalOffset, maxHorizontalOffset),
         );
         setGridHorizontalOffset(finalHorizontalOffset);
         gridHorizontalOffsetRef.current = finalHorizontalOffset;
       },
-    })
+    }),
   ).current;
 
   const getGridTopPosition = () => gridVerticalOffset;
@@ -537,7 +618,7 @@ export default function GridConfigScreen({
   if (!fontsLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#376161" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -548,6 +629,16 @@ export default function GridConfigScreen({
 
   return (
     <SafeAreaView style={styles.backgroundContainer} edges={["top"]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.backButtonText}>←</Text>
+        </TouchableOpacity>
+      </View>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -665,9 +756,9 @@ export default function GridConfigScreen({
                 onSlidingComplete={() =>
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 }
-                minimumTrackTintColor="#376161"
-                maximumTrackTintColor="#ddd"
-                thumbTintColor="#376161"
+                minimumTrackTintColor={colors.primary}
+                maximumTrackTintColor={colors.sliderTrack}
+                thumbTintColor={colors.primary}
               />
               <Text style={styles.sliderLabel}>Bigger</Text>
             </View>
@@ -763,7 +854,9 @@ export default function GridConfigScreen({
         visible={resultModal.visible}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setResultModal({ ...resultModal, visible: false })}
+        onRequestClose={() =>
+          setResultModal({ ...resultModal, visible: false })
+        }
       >
         <View style={styles.resultModalOverlay}>
           <View style={styles.resultModalContent}>
@@ -793,309 +886,327 @@ export default function GridConfigScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  backgroundContainer: {
-    flex: 1,
-    backgroundColor: "#97C8C9",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "transparent",
-  },
-  content: {
-    padding: 20,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontFamily: "Lato_700Bold",
-    color: "#444",
-    marginBottom: 12,
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  uploadButton: {
-    backgroundColor: "rgba(55,97,97,0.15)",
-    width: "100%",
-    aspectRatio: 2,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderStyle: "dashed",
-    borderColor: "#376161",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  uploadButtonText: {
-    fontSize: 16,
-    fontFamily: "Lato_700Bold",
-    color: "#203838",
-  },
-  uploadedImageContainer: {
-    width: "100%",
-    aspectRatio: 2,
-    borderRadius: 8,
-    overflow: "hidden",
-    backgroundColor: "#f5f5f5",
-    marginBottom: 12,
-  },
-  uploadedImage: {
-    width: "100%",
-    height: "100%",
-  },
-  changeImageButton: {
-    backgroundColor: "transparent",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  changeImageButtonText: {
-    fontSize: 14,
-    fontFamily: "Lato_700Bold",
-    color: "#376161",
-  },
-  splitControlContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 20,
-  },
-  arrowButton: {
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  arrowButtonText: {
-    fontSize: 40,
-    color: "#376161",
-    fontWeight: "300",
-  },
-  arrowButtonDisabled: {
-    opacity: 0.3,
-  },
-  splitNumberBox: {
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: "#376161",
-    minWidth: 120,
-    paddingVertical: 20,
-    paddingHorizontal: 30,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  splitNumberText: {
-    fontSize: 48,
-    fontFamily: "Lato_700Bold",
-    color: "#376161",
-  },
-  aspectRatioDisplay: {
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: "#376161",
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    width: "100%",
-    alignItems: "center",
-  },
-  aspectRatioText: {
-    fontSize: 24,
-    fontFamily: "Lato_700Bold",
-    color: "#376161",
-  },
-  sliderContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 8,
-  },
-  sliderLabel: {
-    fontSize: 12,
-    fontFamily: "Lato_700Bold",
-    color: "#666",
-    textTransform: "uppercase",
-  },
-  slider: {
-    flex: 1,
-    height: 40,
-  },
-  sliderValue: {
-    fontSize: 16,
-    fontFamily: "Lato_700Bold",
-    color: "#376161",
-    textAlign: "center",
-    marginTop: 8,
-  },
-  gridPreview: {
-    position: "relative",
-    width: "100%",
-    aspectRatio: 1,
-    borderRadius: 0,
-    overflow: "hidden",
-    marginBottom: 10,
-    backgroundColor: "#000",
-  },
-  gridBackgroundImage: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
-  gridContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  gridOverlay: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "transparent",
-  },
-  gridRow: {
-    flexDirection: "row",
-    width: "100%",
-  },
-  gridCell: {
-    justifyContent: "center",
-    alignItems: "center",
-    borderRightWidth: 2,
-    borderRightColor: "rgba(255, 255, 255, 0.9)",
-    borderBottomWidth: 2,
-    borderBottomColor: "rgba(255, 255, 255, 0.9)",
-    backgroundColor: "rgba(0,0,0,0.1)",
-  },
-  gridBorder: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "transparent",
-  },
-  generateSection: {
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  loadingContainer: {
-    alignItems: "center",
-    padding: 30,
-    backgroundColor: "#f9f9f9",
-    borderRadius: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  loadingText: {
-    fontSize: 16,
-    fontFamily: "Lato_700Bold",
-    color: "#333",
-    marginTop: 15,
-    marginBottom: 20,
-  },
-  progressBarContainer: {
-    width: "100%",
-    height: 10,
-    backgroundColor: "#e0e0e0",
-    borderRadius: 5,
-    overflow: "hidden",
-    marginBottom: 10,
-  },
-  progressBar: {
-    height: "100%",
-    backgroundColor: "#376161",
-    borderRadius: 5,
-  },
-  progressText: {
-    fontSize: 14,
-    fontFamily: "Lato_700Bold",
-    color: "#376161",
-  },
-  generateButton: {
-    backgroundColor: "#376161",
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 30,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  generateButtonText: {
-    color: "#fff",
-    fontSize: 17,
-    fontFamily: "Lato_700Bold",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  // Result Modal
-  resultModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 30,
-  },
-  resultModalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 30,
-    alignItems: "center",
-    width: "100%",
-    maxWidth: 320,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  resultModalIcon: {
-    fontSize: 48,
-    color: "#376161",
-    marginBottom: 12,
-    fontWeight: "700",
-  },
-  resultModalTitle: {
-    fontSize: 22,
-    fontFamily: "Lato_700Bold",
-    color: "#376161",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  resultModalMessage: {
-    fontSize: 15,
-    color: "#555",
-    lineHeight: 22,
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  resultModalButton: {
-    backgroundColor: "#376161",
-    paddingVertical: 14,
-    paddingHorizontal: 48,
-    borderRadius: 30,
-    alignItems: "center",
-  },
-  resultModalButtonError: {
-    backgroundColor: "#c0392b",
-  },
-  resultModalButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontFamily: "Lato_700Bold",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-});
+const createStyles = (c: ThemeColors) =>
+  StyleSheet.create({
+    backgroundContainer: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    header: {
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+    },
+    backButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: c.iconButtonBg,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    backButtonText: {
+      fontSize: 24,
+      color: c.primary,
+      fontWeight: "600",
+    },
+    container: {
+      flex: 1,
+      backgroundColor: "transparent",
+    },
+    content: {
+      padding: 20,
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionTitle: {
+      fontSize: 14,
+      fontFamily: "Lato_700Bold",
+      color: c.textSecondary,
+      marginBottom: 12,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+    },
+    uploadButton: {
+      backgroundColor: c.iconButtonBg,
+      width: "100%",
+      aspectRatio: 2,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 2,
+      borderStyle: "dashed",
+      borderColor: c.primary,
+      shadowColor: c.shadowColor,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    uploadButtonText: {
+      fontSize: 16,
+      fontFamily: "Lato_700Bold",
+      color: c.primaryDark,
+    },
+    uploadedImageContainer: {
+      width: "100%",
+      aspectRatio: 2,
+      borderRadius: 8,
+      overflow: "hidden",
+      backgroundColor: c.inputBg,
+      marginBottom: 12,
+    },
+    uploadedImage: {
+      width: "100%",
+      height: "100%",
+    },
+    changeImageButton: {
+      backgroundColor: "transparent",
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    changeImageButtonText: {
+      fontSize: 14,
+      fontFamily: "Lato_700Bold",
+      color: c.primary,
+    },
+    splitControlContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 20,
+    },
+    arrowButton: {
+      paddingHorizontal: 15,
+      paddingVertical: 10,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    arrowButtonText: {
+      fontSize: 40,
+      color: c.primary,
+      fontWeight: "300",
+    },
+    arrowButtonDisabled: {
+      opacity: 0.3,
+    },
+    splitNumberBox: {
+      backgroundColor: c.accent,
+      borderWidth: 1,
+      borderColor: c.primary,
+      minWidth: 120,
+      paddingVertical: 20,
+      paddingHorizontal: 30,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    splitNumberText: {
+      fontSize: 48,
+      fontFamily: "Lato_700Bold",
+      color: c.primary,
+    },
+    aspectRatioDisplay: {
+      backgroundColor: c.accent,
+      borderWidth: 1,
+      borderColor: c.primary,
+      paddingVertical: 16,
+      paddingHorizontal: 24,
+      borderRadius: 12,
+      width: "100%",
+      alignItems: "center",
+    },
+    aspectRatioText: {
+      fontSize: 24,
+      fontFamily: "Lato_700Bold",
+      color: c.primary,
+    },
+    sliderContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingHorizontal: 8,
+    },
+    sliderLabel: {
+      fontSize: 12,
+      fontFamily: "Lato_700Bold",
+      color: c.textMuted,
+      textTransform: "uppercase",
+    },
+    slider: {
+      flex: 1,
+      height: 40,
+    },
+    sliderValue: {
+      fontSize: 16,
+      fontFamily: "Lato_700Bold",
+      color: c.primary,
+      textAlign: "center",
+      marginTop: 8,
+    },
+    gridPreview: {
+      position: "relative",
+      width: "100%",
+      aspectRatio: 1,
+      borderRadius: 0,
+      overflow: "hidden",
+      marginBottom: 10,
+      backgroundColor: "#000",
+    },
+    gridBackgroundImage: {
+      width: "100%",
+      height: "100%",
+      resizeMode: "cover",
+    },
+    gridContainer: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    gridOverlay: {
+      width: "100%",
+      height: "100%",
+      backgroundColor: "transparent",
+    },
+    gridRow: {
+      flexDirection: "row",
+      width: "100%",
+    },
+    gridCell: {
+      justifyContent: "center",
+      alignItems: "center",
+      borderRightWidth: 2,
+      borderRightColor: "rgba(255, 255, 255, 0.9)",
+      borderBottomWidth: 2,
+      borderBottomColor: "rgba(255, 255, 255, 0.9)",
+      backgroundColor: "rgba(0,0,0,0.1)",
+    },
+    gridBorder: {
+      width: "100%",
+      height: "100%",
+      backgroundColor: "transparent",
+    },
+    generateSection: {
+      marginTop: 10,
+      marginBottom: 20,
+    },
+    loadingContainer: {
+      alignItems: "center",
+      padding: 30,
+      backgroundColor: c.cardAlt,
+      borderRadius: 10,
+      shadowColor: c.shadowColor,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    loadingText: {
+      fontSize: 16,
+      fontFamily: "Lato_700Bold",
+      color: c.textPrimary,
+      marginTop: 15,
+      marginBottom: 20,
+    },
+    progressBarContainer: {
+      width: "100%",
+      height: 10,
+      backgroundColor: c.progressBg,
+      borderRadius: 5,
+      overflow: "hidden",
+      marginBottom: 10,
+    },
+    progressBar: {
+      height: "100%",
+      backgroundColor: c.primary,
+      borderRadius: 5,
+    },
+    progressText: {
+      fontSize: 14,
+      fontFamily: "Lato_700Bold",
+      color: c.primary,
+    },
+    generateButton: {
+      backgroundColor: c.primary,
+      paddingVertical: 16,
+      paddingHorizontal: 32,
+      borderRadius: 30,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: c.shadowColor,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.2,
+      shadowRadius: 5,
+      elevation: 5,
+    },
+    generateButtonText: {
+      color: c.buttonText,
+      fontSize: 17,
+      fontFamily: "Lato_700Bold",
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+    },
+    // Result Modal
+    resultModalOverlay: {
+      flex: 1,
+      backgroundColor: c.overlayBg,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 30,
+    },
+    resultModalContent: {
+      backgroundColor: c.modalBg,
+      borderRadius: 20,
+      padding: 30,
+      alignItems: "center",
+      width: "100%",
+      maxWidth: 320,
+      shadowColor: c.shadowColor,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 10,
+      elevation: 10,
+    },
+    resultModalIcon: {
+      fontSize: 48,
+      color: c.primary,
+      marginBottom: 12,
+      fontWeight: "700",
+    },
+    resultModalTitle: {
+      fontSize: 22,
+      fontFamily: "Lato_700Bold",
+      color: c.primary,
+      marginBottom: 8,
+      textAlign: "center",
+    },
+    resultModalMessage: {
+      fontSize: 15,
+      color: c.textTertiary,
+      lineHeight: 22,
+      textAlign: "center",
+      marginBottom: 24,
+    },
+    resultModalButton: {
+      backgroundColor: c.primary,
+      paddingVertical: 14,
+      paddingHorizontal: 48,
+      borderRadius: 30,
+      alignItems: "center",
+    },
+    resultModalButtonError: {
+      backgroundColor: c.danger,
+    },
+    resultModalButtonText: {
+      color: c.buttonText,
+      fontSize: 16,
+      fontFamily: "Lato_700Bold",
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+    },
+  });
