@@ -2,7 +2,7 @@
 
 A modern cross-platform application built with **React Native** (mobile) and **React** (web), sharing common components and logic.
 
-## 🚀 Project Structure
+## Project Structure
 
 ```
 pixert/
@@ -12,7 +12,7 @@ pixert/
 └── README.md
 ```
 
-## 📱 Tech Stack
+## Tech Stack
 
 ### Mobile (React Native + Expo)
 
@@ -34,7 +34,7 @@ pixert/
 - **Shared Components** - Reusable UI components
 - **Shared Utilities** - Common helper functions
 
-## 🛠️ Prerequisites
+## Prerequisites
 
 Before you begin, ensure you have the following installed:
 
@@ -42,7 +42,7 @@ Before you begin, ensure you have the following installed:
 - **npm** or **yarn**
 - **Expo Go app** on your phone (for mobile preview)
 
-## 📦 Installation
+## Installation
 
 1. **Clone the repository** (or you're already here!)
 
@@ -62,7 +62,7 @@ npm install
 cd ..
 ```
 
-## 🏃 Running the Apps
+## Running the Apps
 
 ### Mobile App (React Native + Expo)
 
@@ -95,7 +95,7 @@ The web app will be available at **http://localhost:5173**
 
 You can preview it directly in VS Code's Simple Browser or any web browser!
 
-## 🎨 Features
+## Features
 
 - ✅ **Cross-platform** - Single codebase for iOS, Android, and Web
 - ✅ **Shared components** - Reusable UI components across platforms
@@ -104,7 +104,7 @@ You can preview it directly in VS Code's Simple Browser or any web browser!
 - ✅ **Navigation** - Configured routing for both mobile and web
 - ✅ **Modern tooling** - Expo and Vite for best DX
 
-## 📁 Key Files
+## Key Files
 
 ### Mobile
 
@@ -124,7 +124,7 @@ You can preview it directly in VS Code's Simple Browser or any web browser!
 - `shared/src/utils/` - Shared utility functions
 - `shared/src/types/` - Shared TypeScript types
 
-## 🔧 Development Tips
+## Development Tips
 
 ### VS Code is Perfect for This!
 
@@ -145,9 +145,9 @@ You can preview it directly in VS Code's Simple Browser or any web browser!
 2. Export it in `shared/src/index.ts`
 3. Import in mobile or web: `import { Component } from '@shared/components/Component'`
 
-## 📱 Mobile Preview Options
+## Mobile Preview Options
 
-1. **Expo Go (Easiest)** ⭐
+1. **Expo Go (Easiest)**
 
    - Install Expo Go app on your phone
    - Scan QR code - instant preview!
@@ -162,20 +162,20 @@ You can preview it directly in VS Code's Simple Browser or any web browser!
    - Requires Xcode
    - Run with `npm run ios` in mobile folder
 
-## 🌐 Web Preview
+## Web Preview
 
 - Development server: `http://localhost:5173`
 - Can preview in VS Code's Simple Browser
 - Or use any web browser
 
-## 📚 Learn More
+## Learn More
 
 - [React Native Docs](https://reactnative.dev/)
 - [Expo Docs](https://docs.expo.dev/)
 - [React Docs](https://react.dev/)
 - [Vite Docs](https://vitejs.dev/)
 
-## 🤝 Contributing
+## ontributing
 
 This is your project! Feel free to modify and extend it as needed.
 
@@ -185,4 +185,4 @@ MIT
 
 ---
 
-**Happy Coding! 🎉**
+**Happy Coding!**
